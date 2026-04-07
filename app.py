@@ -51,9 +51,6 @@ st.markdown("""
 # FUNCIÓN PARA ENVIAR CORREOS REALES
 # ============================================
 def enviar_correo_real(destinatario, asunto, cuerpo_html, smtp_config):
-    """
-    Envía un correo real usando SMTP
-    """
     try:
         msg = MIMEMultipart()
         msg['From'] = smtp_config['sender']
@@ -66,15 +63,11 @@ def enviar_correo_real(destinatario, asunto, cuerpo_html, smtp_config):
         server.login(smtp_config['sender'], smtp_config['password'])
         server.send_message(msg)
         server.quit()
-        
         return True, "Correo enviado exitosamente"
     except Exception as e:
         return False, str(e)
 
 def generar_cuerpo_correo(team_name, team_cases, days_before):
-    """
-    Genera el HTML del correo
-    """
     today = datetime.now()
     
     html = f"""
@@ -140,11 +133,10 @@ def generar_cuerpo_correo(team_name, team_cases, days_before):
     </body>
     </html>
     """
-    
     return html
 
 # ============================================
-# CLASE PROCESAR CASES (con soporte para archivo de mapeo)
+# CLASE PROCESAR CASES
 # ============================================
 class CaseProcessor:
     def __init__(self, df: pd.DataFrame):
@@ -194,7 +186,6 @@ class CaseProcessor:
         return False
     
     def load_team_mapping_from_file(self, mapping_file):
-        """Carga el mapeo desde archivo Excel (como VLOOKUP original)"""
         try:
             df_mapping = pd.read_excel(mapping_file)
             if len(df_mapping.columns) >= 2:
@@ -209,7 +200,6 @@ class CaseProcessor:
             return None
     
     def get_auto_mapping(self):
-        """Mapeo automático por palabras clave (fallback)"""
         unique_types = self.df["Case Type"].dropna().unique()
         mapping = {}
         for ct in unique_types:
@@ -229,7 +219,6 @@ class CaseProcessor:
         return mapping
     
     def add_team_owner_column(self, mapping_file=None):
-        """Agrega TeamOwner usando archivo de mapeo o automático"""
         if "Case Type" not in self.df.columns:
             return False
         
@@ -245,7 +234,6 @@ class CaseProcessor:
                     self.df.loc[mask_null, "TeamOwner"] = self.df.loc[mask_null, "Case Type"].map(auto_mapping)
                 return True
         
-        # Fallback: mapeo automático
         auto_mapping = self.get_auto_mapping()
         self.df["TeamOwner"] = self.df["Case Type"].map(auto_mapping)
         return True
@@ -370,9 +358,7 @@ with st.sidebar:
     
     st.markdown("---")
     
-    # ============================================
-    # CONFIGURACIÓN DE CORREO (para envíos reales)
-    # ============================================
+    # CONFIGURACIÓN DE CORREO
     st.subheader("📧 Configuración de Correo")
     
     usar_correos_reales = st.checkbox("✅ Enviar correos REALES", value=False)
@@ -490,7 +476,7 @@ elif menu == "📁 1. Cargar Datos":
             st.error(f"Error al cargar: {e}")
 
 # ============================================
-# 3. PROCESAR DATOS (CON SOPORTE PARA ARCHIVO DE MAPEO)
+# 3. PROCESAR DATOS
 # ============================================
 elif menu == "⚙️ 2. Procesar Datos":
     st.header("⚙️ Procesar Datos")
@@ -520,40 +506,6 @@ elif menu == "⚙️ 2. Procesar Datos":
             else:
                 st.warning("⚠️ Por favor sube el archivo de mapeo o cambia a modo automático")
         
-        # Configurar emails de equipos
-        st.subheader("📧 Configuración de emails por equipo")
-        st.info("Ingresa los correos electrónicos para cada equipo (se usarán para enviar alertas)")
-        
-        # Obtener equipos únicos del archivo original
-        if 'Case Type' in st.session_state.df_original.columns:
-            case_types = st.session_state.df_original['Case Type'].dropna().unique()
-            # Generar nombres de equipo tentativos
-            equipos_temp = []
-            for ct in case_types:
-                ct_str = str(ct).lower()
-                if "adjustment" in ct_str:
-                    equipos_temp.append("Team AOS")
-                elif "naturalization" in ct_str:
-                    equipos_temp.append("Team Naturalization")
-                elif "consular" in ct_str:
-                    equipos_temp.append("Team Consular")
-                elif "rfe" in ct_str:
-                    equipos_temp.append("Team RFE")
-                elif "interview" in ct_str:
-                    equipos_temp.append("Team Interviews")
-                else:
-                    equipos_temp.append("Team General")
-            
-            equipos_unicos = list(set(equipos_temp))
-            
-            for equipo in equipos_unicos:
-                email_key = f"email_{equipo.replace(' ', '_')}"
-                st.session_state.team_emails[equipo] = st.text_input(
-                    f"Email para {equipo}", 
-                    value=st.session_state.team_emails.get(equipo, ""),
-                    key=email_key
-                )
-        
         if st.button("🚀 EJECUTAR PROCESAMIENTO", type="primary", use_container_width=True):
             with st.spinner("Procesando datos... Esto puede tomar unos segundos"):
                 try:
@@ -581,8 +533,13 @@ elif menu == "⚙️ 2. Procesar Datos":
                     with col3:
                         st.metric("Duplicados eliminados", dups)
                     
+                    # MOSTRAR LOS TEAMOWNER REALES
                     if 'TeamOwner' in df_procesado.columns:
-                        st.subheader("📊 Distribución de TeamOwner")
+                        st.subheader("📊 Equipos encontrados (TeamOwner)")
+                        equipos_reales = df_procesado['TeamOwner'].dropna().unique()
+                        st.write(f"**Equipos:** {', '.join(equipos_reales)}")
+                        
+                        # Distribución
                         team_counts = df_procesado['TeamOwner'].value_counts()
                         st.dataframe(team_counts.reset_index().rename(columns={'index': 'TeamOwner', 'TeamOwner': 'Cantidad'}), use_container_width=True)
                     
@@ -595,13 +552,27 @@ elif menu == "⚙️ 2. Procesar Datos":
                         if col in df_procesado.columns:
                             st.write(f"✅ `{col}` - Agregada correctamente")
                     
+                    # CONFIGURAR EMAILS POR TEAMOWNER REAL
+                    st.subheader("📧 Configuración de emails por equipo")
+                    st.info("Ingresa los correos electrónicos para cada TeamOwner")
+                    
+                    equipos_reales = df_procesado['TeamOwner'].dropna().unique()
+                    for equipo in equipos_reales:
+                        email_key = f"email_{equipo.replace(' ', '_').replace('#', '')}"
+                        st.session_state.team_emails[equipo] = st.text_input(
+                            f"Email para {equipo}", 
+                            value=st.session_state.team_emails.get(equipo, ""),
+                            key=email_key,
+                            placeholder=f"correo@{equipo.replace(' ', '').lower()}.com"
+                        )
+                    
                 except Exception as e:
                     st.error(f"Error durante el procesamiento: {e}")
     else:
         st.warning("⚠️ Primero carga un archivo en 'Cargar Datos'")
 
 # ============================================
-# 4. ENVIAR ALERTAS (CON CORREOS REALES)
+# 4. ENVIAR ALERTAS
 # ============================================
 elif menu == "📧 3. Enviar Alertas":
     st.header("📧 Sistema de Alertas")
@@ -644,18 +615,15 @@ elif menu == "📧 3. Enviar Alertas":
                     display_df = team_cases[['Case #', 'Case Type', 'Case Status', 'Deadline', 'Desktime']].copy()
                     st.dataframe(display_df, use_container_width=True)
                     
-                    # Mostrar el email configurado para este equipo
                     email_destino = st.session_state.team_emails.get(team, "")
                     if email_destino:
                         st.info(f"📧 Email configurado: {email_destino}")
                     else:
-                        st.warning(f"⚠️ No hay email configurado para {team}")
+                        st.warning(f"⚠️ No hay email configurado para {team}. Ve a 'Procesar Datos' y configura los emails.")
                     
                     if st.button(f"Enviar alerta a {team}", key=f"btn_{team}"):
                         if enviar_reales:
-                            # Envío de correo REAL
                             if email_destino:
-                                # Verificar configuración SMTP en sidebar
                                 if usar_correos_reales and smtp_config['sender'] and smtp_config['password']:
                                     cuerpo = generar_cuerpo_correo(team, team_cases, days_before)
                                     success, mensaje = enviar_correo_real(
@@ -678,9 +646,8 @@ elif menu == "📧 3. Enviar Alertas":
                                 else:
                                     st.error("❌ Configura el correo en el panel lateral (sidebar)")
                             else:
-                                st.error(f"❌ No hay email configurado para {team}. Ve a 'Procesar Datos' y configura los emails.")
+                                st.error(f"❌ No hay email configurado para {team}")
                         else:
-                            # Modo simulación
                             st.info(f"[SIMULACIÓN] Correo enviado a {team} ({email_destino if email_destino else 'sin email configurado'})")
                             st.session_state.alert_history.append({
                                 'fecha': datetime.now().strftime('%Y-%m-%d %H:%M:%S'),
@@ -694,12 +661,9 @@ elif menu == "📧 3. Enviar Alertas":
             st.subheader("📊 Resumen por equipo")
             resumen = alert_df['TeamOwner'].value_counts().reset_index()
             resumen.columns = ['Equipo', 'Casos Pendientes']
-            
-            # Agregar columna de email
             resumen['Email'] = resumen['Equipo'].map(lambda x: st.session_state.team_emails.get(x, "No configurado"))
             st.dataframe(resumen, use_container_width=True)
             
-            # Botón para enviar a todos
             if st.button("📧 Enviar alertas a TODOS los equipos", type="primary"):
                 for team, team_cases in alerts_by_team.items():
                     email_destino = st.session_state.team_emails.get(team, "")
@@ -737,14 +701,13 @@ elif menu == "📜 Historial":
         historial_df = pd.DataFrame(st.session_state.alert_history)
         st.dataframe(historial_df, use_container_width=True)
         
-        # Estadísticas del historial
         st.subheader("📊 Estadísticas de envíos")
         col1, col2 = st.columns(2)
         with col1:
             total_envios = len(historial_df)
-            reales = len(historial_df[historial_df['modo'] == 'REAL']) if 'modo' in historial_df.columns else 0
             st.metric("Total de envíos", total_envios)
         with col2:
+            reales = len(historial_df[historial_df['modo'] == 'REAL']) if 'modo' in historial_df.columns else 0
             st.metric("Correos reales enviados", reales)
         
         if st.button("🗑️ Limpiar historial"):
