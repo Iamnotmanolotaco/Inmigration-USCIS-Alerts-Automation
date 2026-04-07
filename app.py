@@ -4,6 +4,9 @@ import re
 from datetime import datetime, timedelta
 import io
 import plotly.express as px
+import smtplib
+from email.mime.text import MIMEText
+from email.mime.multipart import MIMEMultipart
 
 # ============================================
 # CONFIGURACIÓN DE LA PÁGINA
@@ -43,6 +46,102 @@ st.markdown("""
     }
 </style>
 """, unsafe_allow_html=True)
+
+# ============================================
+# FUNCIÓN PARA ENVIAR CORREOS REALES
+# ============================================
+def enviar_correo_real(destinatario, asunto, cuerpo_html, smtp_config):
+    """
+    Envía un correo real usando SMTP
+    """
+    try:
+        msg = MIMEMultipart()
+        msg['From'] = smtp_config['sender']
+        msg['To'] = destinatario
+        msg['Subject'] = asunto
+        msg.attach(MIMEText(cuerpo_html, 'html'))
+        
+        server = smtplib.SMTP(smtp_config['server'], smtp_config['port'])
+        server.starttls()
+        server.login(smtp_config['sender'], smtp_config['password'])
+        server.send_message(msg)
+        server.quit()
+        
+        return True, "Correo enviado exitosamente"
+    except Exception as e:
+        return False, str(e)
+
+def generar_cuerpo_correo(team_name, team_cases, days_before):
+    """
+    Genera el HTML del correo
+    """
+    today = datetime.now()
+    
+    html = f"""
+    <html>
+    <head>
+        <style>
+            body {{ font-family: Arial, sans-serif; }}
+            .header {{ background-color: #1a3a5c; color: white; padding: 20px; text-align: center; }}
+            .content {{ padding: 20px; }}
+            table {{ border-collapse: collapse; width: 100%; margin-top: 20px; }}
+            th {{ background-color: #2a5a8c; color: white; padding: 10px; text-align: left; }}
+            td {{ border: 1px solid #ddd; padding: 8px; }}
+            tr:nth-child(even) {{ background-color: #f2f2f2; }}
+            .urgent {{ color: #c0392b; font-weight: bold; }}
+            .warning {{ color: #e67e22; font-weight: bold; }}
+            .footer {{ font-size: 11px; color: gray; text-align: center; margin-top: 30px; }}
+        </style>
+    </head>
+    <body>
+        <div class="header">
+            <h2>ST LEGAL AUTOMATED</h2>
+            <p>Sistema de Alertas de Casos</p>
+        </div>
+        <div class="content">
+            <h3>Hola, {team_name}</h3>
+            <p>Tienes <strong>{len(team_cases)} casos</strong> que requieren atención en los próximos {days_before} días.</p>
+            
+            <table>
+                <thead>
+                    <tr>
+                        <th>Case #</th>
+                        <th>Case Type</th>
+                        <th>Case Status</th>
+                        <th>Deadline</th>
+                        <th>Desktime</th>
+                    </tr>
+                </thead>
+                <tbody>
+    """
+    
+    for _, row in team_cases.iterrows():
+        desktime = row.get('Desktime', 'N/A')
+        color_class = 'urgent' if desktime == 'Out of Desktime' else 'warning' if desktime == 'On time' else ''
+        html += f"""
+                    <tr>
+                        <td>{row.get('Case #', 'N/A')}</td>
+                        <td>{row.get('Case Type', 'N/A')}</td>
+                        <td>{row.get('Case Status', 'N/A')}</td>
+                        <td>{row.get('Deadline', 'N/A')}</td>
+                        <td class="{color_class}">{desktime}</td>
+                    </tr>
+        """
+    
+    html += f"""
+                </tbody>
+            </table>
+            <p style="margin-top: 20px;">Por favor revisa estos casos y toma las acciones necesarias.</p>
+        </div>
+        <div class="footer">
+            <p>ST LEGAL Automated System - Reporte generado automáticamente</p>
+            <p>© {today.year} ST LEGAL - Todos los derechos reservados</p>
+        </div>
+    </body>
+    </html>
+    """
+    
+    return html
 
 # ============================================
 # CLASE PROCESAR CASES (con soporte para archivo de mapeo)
@@ -244,6 +343,8 @@ if 'procesado' not in st.session_state:
     st.session_state.procesado = False
 if 'alert_history' not in st.session_state:
     st.session_state.alert_history = []
+if 'team_emails' not in st.session_state:
+    st.session_state.team_emails = {}
 
 # ============================================
 # HEADER PRINCIPAL
@@ -256,7 +357,7 @@ st.markdown("""
 """, unsafe_allow_html=True)
 
 # ============================================
-# SIDEBAR - MENÚ PRINCIPAL
+# SIDEBAR - MENÚ PRINCIPAL Y CONFIGURACIÓN DE CORREO
 # ============================================
 with st.sidebar:
     st.image("https://img.icons8.com/color/96/000000/law.png", width=80)
@@ -266,6 +367,36 @@ with st.sidebar:
         "📋 MENÚ",
         ["📊 Dashboard", "📁 1. Cargar Datos", "⚙️ 2. Procesar Datos", "📧 3. Enviar Alertas", "📜 Historial"]
     )
+    
+    st.markdown("---")
+    
+    # ============================================
+    # CONFIGURACIÓN DE CORREO (para envíos reales)
+    # ============================================
+    st.subheader("📧 Configuración de Correo")
+    
+    usar_correos_reales = st.checkbox("✅ Enviar correos REALES", value=False)
+    
+    smtp_config = {
+        'server': None,
+        'port': None,
+        'sender': None,
+        'password': None
+    }
+    
+    if usar_correos_reales:
+        st.warning("⚠️ Configura tu correo para enviar emails reales")
+        smtp_config['server'] = st.text_input("Servidor SMTP", value="smtp.office365.com")
+        smtp_config['port'] = st.number_input("Puerto SMTP", value=587)
+        smtp_config['sender'] = st.text_input("Email remitente", value="alerts@stlegal.com")
+        smtp_config['password'] = st.text_input("Contraseña", type="password")
+        
+        if smtp_config['sender'] and smtp_config['password']:
+            st.success("✅ Configuración de correo lista")
+        else:
+            st.error("❌ Completa la configuración de correo")
+    else:
+        st.info("ℹ️ Modo simulación - No se enviarán correos reales")
     
     st.markdown("---")
     st.caption(f"Versión: 3.0.0\n{datetime.now().strftime('%d/%m/%Y')}")
@@ -389,6 +520,40 @@ elif menu == "⚙️ 2. Procesar Datos":
             else:
                 st.warning("⚠️ Por favor sube el archivo de mapeo o cambia a modo automático")
         
+        # Configurar emails de equipos
+        st.subheader("📧 Configuración de emails por equipo")
+        st.info("Ingresa los correos electrónicos para cada equipo (se usarán para enviar alertas)")
+        
+        # Obtener equipos únicos del archivo original
+        if 'Case Type' in st.session_state.df_original.columns:
+            case_types = st.session_state.df_original['Case Type'].dropna().unique()
+            # Generar nombres de equipo tentativos
+            equipos_temp = []
+            for ct in case_types:
+                ct_str = str(ct).lower()
+                if "adjustment" in ct_str:
+                    equipos_temp.append("Team AOS")
+                elif "naturalization" in ct_str:
+                    equipos_temp.append("Team Naturalization")
+                elif "consular" in ct_str:
+                    equipos_temp.append("Team Consular")
+                elif "rfe" in ct_str:
+                    equipos_temp.append("Team RFE")
+                elif "interview" in ct_str:
+                    equipos_temp.append("Team Interviews")
+                else:
+                    equipos_temp.append("Team General")
+            
+            equipos_unicos = list(set(equipos_temp))
+            
+            for equipo in equipos_unicos:
+                email_key = f"email_{equipo.replace(' ', '_')}"
+                st.session_state.team_emails[equipo] = st.text_input(
+                    f"Email para {equipo}", 
+                    value=st.session_state.team_emails.get(equipo, ""),
+                    key=email_key
+                )
+        
         if st.button("🚀 EJECUTAR PROCESAMIENTO", type="primary", use_container_width=True):
             with st.spinner("Procesando datos... Esto puede tomar unos segundos"):
                 try:
@@ -436,7 +601,7 @@ elif menu == "⚙️ 2. Procesar Datos":
         st.warning("⚠️ Primero carga un archivo en 'Cargar Datos'")
 
 # ============================================
-# 4. ENVIAR ALERTAS
+# 4. ENVIAR ALERTAS (CON CORREOS REALES)
 # ============================================
 elif menu == "📧 3. Enviar Alertas":
     st.header("📧 Sistema de Alertas")
@@ -453,7 +618,9 @@ elif menu == "📧 3. Enviar Alertas":
         with col2:
             days_after = st.slider("Días después del vencimiento", 0, 30, 3)
         with col3:
-            test_mode = st.checkbox("Modo prueba (solo simular)", value=True)
+            st.write("")
+            st.write("")
+            enviar_reales = st.checkbox("📧 ENVIAR CORREOS REALES", value=False)
         
         st.markdown("---")
         
@@ -477,36 +644,82 @@ elif menu == "📧 3. Enviar Alertas":
                     display_df = team_cases[['Case #', 'Case Type', 'Case Status', 'Deadline', 'Desktime']].copy()
                     st.dataframe(display_df, use_container_width=True)
                     
+                    # Mostrar el email configurado para este equipo
+                    email_destino = st.session_state.team_emails.get(team, "")
+                    if email_destino:
+                        st.info(f"📧 Email configurado: {email_destino}")
+                    else:
+                        st.warning(f"⚠️ No hay email configurado para {team}")
+                    
                     if st.button(f"Enviar alerta a {team}", key=f"btn_{team}"):
-                        if test_mode:
-                            st.info(f"[SIMULACIÓN] Correo enviado a {team}")
-                            st.session_state.alert_history.append({
-                                'fecha': datetime.now().strftime('%Y-%m-%d %H:%M:%S'),
-                                'equipo': team,
-                                'casos': len(team_cases),
-                                'modo': 'prueba'
-                            })
+                        if enviar_reales:
+                            # Envío de correo REAL
+                            if email_destino:
+                                # Verificar configuración SMTP en sidebar
+                                if usar_correos_reales and smtp_config['sender'] and smtp_config['password']:
+                                    cuerpo = generar_cuerpo_correo(team, team_cases, days_before)
+                                    success, mensaje = enviar_correo_real(
+                                        email_destino,
+                                        f"ST LEGAL - Alerta de Casos - {team} - {datetime.now().strftime('%d/%m/%Y')}",
+                                        cuerpo,
+                                        smtp_config
+                                    )
+                                    if success:
+                                        st.success(f"✅ Correo REAL enviado a {team} ({email_destino})")
+                                        st.session_state.alert_history.append({
+                                            'fecha': datetime.now().strftime('%Y-%m-%d %H:%M:%S'),
+                                            'equipo': team,
+                                            'email': email_destino,
+                                            'casos': len(team_cases),
+                                            'modo': 'REAL'
+                                        })
+                                    else:
+                                        st.error(f"❌ Error al enviar: {mensaje}")
+                                else:
+                                    st.error("❌ Configura el correo en el panel lateral (sidebar)")
+                            else:
+                                st.error(f"❌ No hay email configurado para {team}. Ve a 'Procesar Datos' y configura los emails.")
                         else:
-                            st.success(f"✅ Alerta enviada a {team}")
+                            # Modo simulación
+                            st.info(f"[SIMULACIÓN] Correo enviado a {team} ({email_destino if email_destino else 'sin email configurado'})")
                             st.session_state.alert_history.append({
                                 'fecha': datetime.now().strftime('%Y-%m-%d %H:%M:%S'),
                                 'equipo': team,
+                                'email': email_destino if email_destino else 'no configurado',
                                 'casos': len(team_cases),
-                                'modo': 'producción'
+                                'modo': 'SIMULACIÓN'
                             })
             
             st.markdown("---")
             st.subheader("📊 Resumen por equipo")
             resumen = alert_df['TeamOwner'].value_counts().reset_index()
             resumen.columns = ['Equipo', 'Casos Pendientes']
+            
+            # Agregar columna de email
+            resumen['Email'] = resumen['Equipo'].map(lambda x: st.session_state.team_emails.get(x, "No configurado"))
             st.dataframe(resumen, use_container_width=True)
             
+            # Botón para enviar a todos
             if st.button("📧 Enviar alertas a TODOS los equipos", type="primary"):
-                for team in alerts_by_team.keys():
-                    if test_mode:
-                        st.info(f"[SIMULACIÓN] Correo enviado a {team}")
+                for team, team_cases in alerts_by_team.items():
+                    email_destino = st.session_state.team_emails.get(team, "")
+                    if enviar_reales:
+                        if email_destino and usar_correos_reales and smtp_config['sender'] and smtp_config['password']:
+                            cuerpo = generar_cuerpo_correo(team, team_cases, days_before)
+                            success, _ = enviar_correo_real(
+                                email_destino,
+                                f"ST LEGAL - Alerta de Casos - {team} - {datetime.now().strftime('%d/%m/%Y')}",
+                                cuerpo,
+                                smtp_config
+                            )
+                            if success:
+                                st.success(f"✅ Enviado a {team}")
+                            else:
+                                st.error(f"❌ Error con {team}")
+                        else:
+                            st.warning(f"⚠️ No se pudo enviar a {team} - falta configuración")
                     else:
-                        st.success(f"✅ Alerta enviada a {team}")
+                        st.info(f"[SIMULACIÓN] Enviado a {team}")
                 st.success("Proceso completado")
                 
         else:
@@ -523,6 +736,16 @@ elif menu == "📜 Historial":
     if len(st.session_state.alert_history) > 0:
         historial_df = pd.DataFrame(st.session_state.alert_history)
         st.dataframe(historial_df, use_container_width=True)
+        
+        # Estadísticas del historial
+        st.subheader("📊 Estadísticas de envíos")
+        col1, col2 = st.columns(2)
+        with col1:
+            total_envios = len(historial_df)
+            reales = len(historial_df[historial_df['modo'] == 'REAL']) if 'modo' in historial_df.columns else 0
+            st.metric("Total de envíos", total_envios)
+        with col2:
+            st.metric("Correos reales enviados", reales)
         
         if st.button("🗑️ Limpiar historial"):
             st.session_state.alert_history = []
