@@ -1,6 +1,3 @@
-# st_legal_alert_system.py
-# Versión con interfaz elegante y consistente con el estilo del correo
-
 import streamlit as st
 import pandas as pd
 import smtplib
