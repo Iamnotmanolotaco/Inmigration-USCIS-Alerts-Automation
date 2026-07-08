@@ -1,3 +1,6 @@
+# st_legal_alert_system.py
+# Versión con interfaz elegante y consistente con el estilo del correo
+
 import streamlit as st
 import pandas as pd
 import smtplib
@@ -10,7 +13,7 @@ from datetime import datetime, timedelta
 import os
 import json
 import re
-import requests  # Necesario para descargar la imagen desde GitHub
+import requests
 
 # ============================================================
 # CONFIGURACIÓN
@@ -20,30 +23,46 @@ import requests  # Necesario para descargar la imagen desde GitHub
 SMTP_SERVER = "smtp.office365.com"
 SMTP_PORT = 587
 
-# URL del logo en GitHub (¡CAMBIA ESTA URL POR LA TUYA!)
-URL_LOGO_GITHUB = "https://raw.githubusercontent.com/Iamnotmanolotaco/Inmigration-USCIS-Alerts-Automation/main/image.png"
+# URL del logo en GitHub
+URL_LOGO_GITHUB = "https://raw.githubusercontent.com/Iamnotmanolotaco/Inmigration-USCIS-Alerts-Automation/main/logo.png"
 
 DAYS_BEFORE = 7
 DAYS_AFTER = 30
+
+# ============================================================
+# CONFIGURACIÓN DE ESTILOS
+# ============================================================
+
+# Colores corporativos
+COLORS = {
+    "primary": "#1a3a5c",
+    "secondary": "#4a7c9c",
+    "light_bg": "#f0f4f8",
+    "card_bg": "#ffffff",
+    "border": "#d0d8e4",
+    "text": "#1a2a3a",
+    "text_light": "#4a6a8a",
+    "urgent": "#c0392b",
+    "warning": "#e67e22",
+    "info": "#1e40af",
+    "success": "#27ae60",
+}
 
 # ============================================================
 # FUNCIÓN PARA OBTENER LOGO DESDE GITHUB
 # ============================================================
 
 def get_logo_from_github(url):
-    """
-    Descarga la imagen desde una URL de GitHub y la convierte a Base64.
-    """
+    """Descarga la imagen desde una URL de GitHub y la convierte a Base64."""
     try:
         response = requests.get(url, timeout=10)
         if response.status_code == 200:
             base64_string = base64.b64encode(response.content).decode('utf-8')
             return f"data:image/png;base64,{base64_string}"
         else:
-            st.error(f"No se pudo descargar el logo (código {response.status_code})")
+            return None
     except Exception as e:
-        st.error(f"Error al descargar el logo: {e}")
-    return None
+        return None
 
 # ============================================================
 # FUNCIONES DE UTILIDAD
@@ -94,14 +113,11 @@ def get_days_style(days):
 def get_team_email(team_name):
     team_emails = {
         "Kia": "dataprojects@communitylawgroup.com",
-        # Agregar más equipos según necesidad
     }
     return team_emails.get(team_name.strip(), None)
 
 def get_cc_for_team(team_name):
-    cc_by_team = {
-        # "Kia": ["cc1@email.com", "cc2@email.com"],
-    }
+    cc_by_team = {}
     default_cc = ["default_supervisor@communitylawgroup.com"]
     return cc_by_team.get(team_name.strip(), default_cc)
 
@@ -112,7 +128,6 @@ def get_cc_for_team(team_name):
 def generar_html_correo(team_cases, team_name, fecha_referencia, logo_base64=None):
     """Genera el HTML del correo con los casos"""
     
-    # Filtrar RFE
     is_rfe = pd.Series([False] * len(team_cases), index=team_cases.index)
     if 'Case Status' in team_cases.columns:
         for idx, status in team_cases['Case Status'].items():
@@ -134,10 +149,8 @@ def generar_html_correo(team_cases, team_name, fecha_referencia, logo_base64=Non
     total_cases = len(team_cases_filtered)
     urgent_count = len(overdue)
     upcoming_count = len(upcoming)
-    
     rfe_excluded = is_rfe.sum()
     
-    # Logo HTML
     logo_html = ""
     if logo_base64:
         logo_html = f"""
@@ -146,7 +159,6 @@ def generar_html_correo(team_cases, team_name, fecha_referencia, logo_base64=Non
         </div>
         """
     
-    # Generar HTML
     html = f"""
     <!DOCTYPE html>
     <html>
@@ -379,14 +391,12 @@ def procesar_alertas(df, fecha_referencia, smtp_username, smtp_password,
     resultados = []
     errores = []
     
-    # Validar columnas
     if 'TeamOwner' not in df.columns:
         return [], ["❌ Error: La columna 'TeamOwner' no existe en el archivo"]
     
     df['TeamOwner'] = df['TeamOwner'].astype(str).str.strip()
     df['TeamOwner'] = df['TeamOwner'].replace({'KIa': 'Kia', 'kia': 'Kia', 'KIA': 'Kia'})
     
-    # Filtrar por fechas
     df_temp = df.copy()
     
     if 'Deadline' not in df_temp.columns:
@@ -403,7 +413,6 @@ def procesar_alertas(df, fecha_referencia, smtp_username, smtp_password,
     if len(df_alerts) == 0:
         return [], ["⚠️ No hay casos que requieran alerta en el período seleccionado"]
     
-    # Agrupar por equipo
     alerts_by_team = {}
     for team in df_alerts['TeamOwner'].dropna().unique():
         team_cases = df_alerts[df_alerts['TeamOwner'] == team]
@@ -413,12 +422,8 @@ def procesar_alertas(df, fecha_referencia, smtp_username, smtp_password,
     if not alerts_by_team:
         return [], ["⚠️ No se encontraron equipos con alertas"]
     
-    # ============================================================
-    # Cargar logo desde GitHub (REEMPLAZA LA CARGA LOCAL)
-    # ============================================================
     logo_base64 = get_logo_from_github(URL_LOGO_GITHUB)
     
-    # Procesar cada equipo
     for team_name, team_cases in alerts_by_team.items():
         html_body = generar_html_correo(team_cases, team_name, fecha_referencia, logo_base64)
         
@@ -452,7 +457,6 @@ def procesar_alertas(df, fecha_referencia, smtp_username, smtp_password,
                 errores.append(f"❌ {team_name}: {msg}")
         else:
             resultados.append(f"📄 {team_name}: Correo listo (modo simulación)")
-            # Guardar preview
             with open(f"preview_{team_name}.html", 'w', encoding='utf-8') as f:
                 f.write(html_body)
             resultados.append(f"   📄 Preview guardado: preview_{team_name}.html")
@@ -460,100 +464,442 @@ def procesar_alertas(df, fecha_referencia, smtp_username, smtp_password,
     return resultados, errores
 
 # ============================================================
-# INTERFAZ STREAMLIT
+# INTERFAZ STREAMLIT ELEGANTE
 # ============================================================
 
-st.set_page_config(page_title="ST LEGAL Alert System", page_icon="⚖️", layout="wide")
+# Configurar página
+st.set_page_config(
+    page_title="ST LEGAL Alert System",
+    page_icon="⚖️",
+    layout="wide",
+    initial_sidebar_state="expanded"
+)
 
-st.title("⚖️ ST LEGAL - Alert System (Cloud Version)")
-st.markdown("---")
+# CSS personalizado para la interfaz
+st.markdown(f"""
+<style>
+    /* Estilos generales */
+    .main {{
+        background-color: #f0f4f8;
+    }}
+    
+    /* Encabezado */
+    .header-container {{
+        background: linear-gradient(135deg, {COLORS['primary']}, {COLORS['secondary']});
+        padding: 25px 30px;
+        border-radius: 15px;
+        margin-bottom: 25px;
+        display: flex;
+        align-items: center;
+        gap: 20px;
+        box-shadow: 0 4px 15px rgba(26, 58, 92, 0.3);
+    }}
+    
+    .header-logo {{
+        max-width: 80px;
+        height: auto;
+        background: white;
+        padding: 8px;
+        border-radius: 10px;
+        box-shadow: 0 2px 8px rgba(0,0,0,0.1);
+    }}
+    
+    .header-title {{
+        color: white !important;
+        font-size: 28px;
+        font-weight: 700;
+        margin: 0;
+        letter-spacing: -0.5px;
+    }}
+    
+    .header-subtitle {{
+        color: rgba(255,255,255,0.85) !important;
+        font-size: 14px;
+        margin: 4px 0 0 0;
+        font-weight: 400;
+    }}
+    
+    /* Tarjetas */
+    .card {{
+        background-color: #ffffff;
+        border-radius: 12px;
+        padding: 20px 24px;
+        box-shadow: 0 2px 10px rgba(0,0,0,0.05);
+        border: 1px solid #e8edf2;
+        margin-bottom: 16px;
+    }}
+    
+    .card-title {{
+        color: {COLORS['primary']};
+        font-size: 16px;
+        font-weight: 600;
+        margin-bottom: 12px;
+        border-bottom: 2px solid #e8edf2;
+        padding-bottom: 8px;
+    }}
+    
+    /* Badges */
+    .badge-primary {{
+        background-color: {COLORS['primary']};
+        color: white;
+        padding: 4px 14px;
+        border-radius: 20px;
+        font-size: 12px;
+        font-weight: 600;
+        display: inline-block;
+    }}
+    
+    .badge-success {{
+        background-color: {COLORS['success']};
+        color: white;
+        padding: 4px 14px;
+        border-radius: 20px;
+        font-size: 12px;
+        font-weight: 600;
+        display: inline-block;
+    }}
+    
+    .badge-warning {{
+        background-color: {COLORS['warning']};
+        color: white;
+        padding: 4px 14px;
+        border-radius: 20px;
+        font-size: 12px;
+        font-weight: 600;
+        display: inline-block;
+    }}
+    
+    .badge-urgent {{
+        background-color: {COLORS['urgent']};
+        color: white;
+        padding: 4px 14px;
+        border-radius: 20px;
+        font-size: 12px;
+        font-weight: 600;
+        display: inline-block;
+    }}
+    
+    /* Botones */
+    .stButton > button {{
+        border-radius: 8px !important;
+        font-weight: 600 !important;
+        transition: all 0.3s ease !important;
+        border: none !important;
+    }}
+    
+    .stButton > button:hover {{
+        transform: translateY(-2px) !important;
+        box-shadow: 0 4px 12px rgba(0,0,0,0.15) !important;
+    }}
+    
+    /* Métricas */
+    .metric-container {{
+        background-color: {COLORS['light_bg']};
+        border-radius: 10px;
+        padding: 16px 20px;
+        text-align: center;
+        border: 1px solid #e8edf2;
+    }}
+    
+    .metric-value {{
+        font-size: 28px;
+        font-weight: 700;
+        color: {COLORS['primary']};
+    }}
+    
+    .metric-label {{
+        font-size: 12px;
+        color: {COLORS['text_light']};
+        text-transform: uppercase;
+        letter-spacing: 0.5px;
+        font-weight: 600;
+    }}
+    
+    /* Sidebar */
+    .css-1d391kg {{
+        background-color: #ffffff !important;
+        border-right: 1px solid #e8edf2 !important;
+    }}
+    
+    /* Upload */
+    .upload-container {{
+        border: 2px dashed {COLORS['border']};
+        border-radius: 12px;
+        padding: 30px;
+        text-align: center;
+        background-color: #fafbfc;
+        transition: all 0.3s ease;
+    }}
+    
+    .upload-container:hover {{
+        border-color: {COLORS['secondary']};
+        background-color: #f5f8fc;
+    }}
+    
+    /* Resultados */
+    .result-success {{
+        background-color: #eafaf1;
+        border-left: 4px solid {COLORS['success']};
+        padding: 12px 16px;
+        border-radius: 4px;
+        margin: 4px 0;
+    }}
+    
+    .result-error {{
+        background-color: #fdedec;
+        border-left: 4px solid {COLORS['urgent']};
+        padding: 12px 16px;
+        border-radius: 4px;
+        margin: 4px 0;
+    }}
+    
+    .result-info {{
+        background-color: #eaf2fa;
+        border-left: 4px solid {COLORS['info']};
+        padding: 12px 16px;
+        border-radius: 4px;
+        margin: 4px 0;
+    }}
+    
+    /* Footer */
+    .footer {{
+        text-align: center;
+        padding: 20px;
+        color: {COLORS['text_light']};
+        font-size: 12px;
+        border-top: 1px solid #e8edf2;
+        margin-top: 30px;
+    }}
+</style>
+""", unsafe_allow_html=True)
 
-# Sidebar con configuración
+# ============================================================
+# ENCABEZADO CON LOGO
+# ============================================================
+
+logo_base64 = get_logo_from_github(URL_LOGO_GITHUB)
+
+if logo_base64:
+    logo_html = f'<img src="{logo_base64}" alt="Community Law Group" class="header-logo">'
+else:
+    logo_html = '<div style="font-size: 36px; font-weight: 700; color: white; background: rgba(255,255,255,0.1); padding: 8px 16px; border-radius: 10px;">CLG</div>'
+
+st.markdown(f"""
+<div class="header-container">
+    {logo_html}
+    <div>
+        <div class="header-title">⚖️ ST LEGAL Alert System</div>
+        <div class="header-subtitle">Deadline and Case Management System — Cloud Version</div>
+    </div>
+    <div style="margin-left: auto; display: flex; gap: 8px;">
+        <span class="badge-primary">v1.0</span>
+        <span class="badge-success">Active</span>
+    </div>
+</div>
+""", unsafe_allow_html=True)
+
+# ============================================================
+# SIDEBAR
+# ============================================================
+
 with st.sidebar:
-    st.header("📧 Configuración SMTP")
-    st.markdown("Ingresa tus credenciales de Outlook para enviar correos")
+    st.markdown("### 📧 Configuración SMTP")
+    st.markdown("Ingresa tus credenciales de Outlook")
     
     smtp_username = st.text_input("Correo de Outlook", value="", placeholder="tu@email.com")
     smtp_password = st.text_input("Contraseña", type="password", placeholder="Contraseña de Outlook")
     
     st.markdown("---")
-    st.header("📁 Archivo de Datos")
+    st.markdown("### 📁 Archivo de Datos")
     uploaded_file = st.file_uploader("Carga el archivo Excel", type=['xlsx', 'xls'])
     
     st.markdown("---")
-    st.header("⚙️ Configuración")
+    st.markdown("### ⚙️ Configuración")
     fecha_referencia = st.date_input("Fecha de referencia", value=datetime.now().date())
     
     test_mode = st.checkbox("Modo prueba (enviar a un solo correo)")
     test_email = st.text_input("Correo de prueba") if test_mode else None
     
     st.markdown("---")
-    enviar_reales = st.button("📨 Enviar Correos Reales", type="primary")
-    simular = st.button("📄 Solo Simulación (sin enviar)")
+    col_btn1, col_btn2 = st.columns(2)
+    with col_btn1:
+        enviar_reales = st.button("📨 Enviar", type="primary", use_container_width=True)
+    with col_btn2:
+        simular = st.button("📄 Simular", use_container_width=True)
+    
+    st.markdown("---")
+    st.caption("🔒 Las credenciales no se guardan. Conexión TLS segura.")
 
-# Área principal
-col1, col2 = st.columns([2, 1])
+# ============================================================
+# ÁREA PRINCIPAL
+# ============================================================
 
-with col1:
+col_main, col_info = st.columns([3, 1])
+
+with col_main:
     if uploaded_file is not None:
-        st.success(f"✅ Archivo cargado: {uploaded_file.name}")
+        # Mostrar info del archivo
+        st.markdown(f"""
+        <div class="card">
+            <div style="display: flex; justify-content: space-between; align-items: center;">
+                <div>
+                    <span style="font-weight: 600;">📂 Archivo cargado</span>
+                    <span style="margin-left: 12px; color: #4a6a8a;">{uploaded_file.name}</span>
+                </div>
+                <span class="badge-success">✅ {uploaded_file.size // 1024} KB</span>
+            </div>
+        </div>
+        """, unsafe_allow_html=True)
         
+        # Leer datos
         df = pd.read_excel(uploaded_file)
-        st.info(f"📊 Registros cargados: {len(df)}")
         
+        # Métricas rápidas
+        st.markdown("### 📊 Resumen de datos")
+        
+        col_met1, col_met2, col_met3, col_met4 = st.columns(4)
+        with col_met1:
+            st.markdown(f"""
+            <div class="metric-container">
+                <div class="metric-value">{len(df)}</div>
+                <div class="metric-label">Registros</div>
+            </div>
+            """, unsafe_allow_html=True)
+        
+        if 'TeamOwner' in df.columns:
+            teams = df['TeamOwner'].dropna().unique()
+            with col_met2:
+                st.markdown(f"""
+                <div class="metric-container">
+                    <div class="metric-value">{len(teams)}</div>
+                    <div class="metric-label">Equipos</div>
+                </div>
+                """, unsafe_allow_html=True)
+        
+        if 'Case Status' in df.columns:
+            rfe_count = df['Case Status'].astype(str).str.upper().str.contains('RFE', na=False).sum()
+            with col_met3:
+                st.markdown(f"""
+                <div class="metric-container">
+                    <div class="metric-value">{rfe_count}</div>
+                    <div class="metric-label">RFE Cases</div>
+                </div>
+                """, unsafe_allow_html=True)
+        
+        if 'Desktime' in df.columns:
+            on_time = len(df[df['Desktime'] == 'On time'])
+            with col_met4:
+                st.markdown(f"""
+                <div class="metric-container">
+                    <div class="metric-value">{on_time}</div>
+                    <div class="metric-label">On Time</div>
+                </div>
+                """, unsafe_allow_html=True)
+        
+        # Vista previa
         with st.expander("👁️ Vista previa de datos"):
-            st.dataframe(df.head(10))
+            st.dataframe(df.head(10), use_container_width=True)
         
+        # Procesar
         if enviar_reales or simular:
             if enviar_reales and (not smtp_username or not smtp_password):
                 st.error("❌ Por favor ingresa tus credenciales de Outlook para enviar correos reales")
             else:
-                with st.spinner("Procesando alertas..."):
+                with st.spinner("⏳ Procesando alertas..."):
                     resultados, errores = procesar_alertas(
                         df, fecha_referencia, smtp_username, smtp_password,
                         test_email, enviar_reales
                     )
                 
                 st.markdown("---")
-                st.subheader("📋 Resultados")
+                st.markdown("### 📋 Resultados")
                 
                 if errores:
                     for err in errores:
-                        st.error(err)
+                        st.markdown(f'<div class="result-error">{err}</div>', unsafe_allow_html=True)
                 
-                for res in resultados:
-                    if res.startswith("✅"):
-                        st.success(res)
-                    elif res.startswith("❌"):
-                        st.error(res)
-                    else:
-                        st.info(res)
+                if resultados:
+                    for res in resultados:
+                        if res.startswith("✅"):
+                            st.markdown(f'<div class="result-success">{res}</div>', unsafe_allow_html=True)
+                        elif res.startswith("❌"):
+                            st.markdown(f'<div class="result-error">{res}</div>', unsafe_allow_html=True)
+                        else:
+                            st.markdown(f'<div class="result-info">{res}</div>', unsafe_allow_html=True)
+                
+                if enviar_reales:
+                    st.balloons()
+                    st.success("🎉 Proceso completado exitosamente")
     else:
-        st.info("📌 Carga un archivo Excel en la barra lateral para comenzar")
+        # Estado inicial
+        st.markdown("""
+        <div class="card" style="text-align: center; padding: 60px 30px;">
+            <div style="font-size: 64px; margin-bottom: 16px;">📂</div>
+            <h3 style="color: #1a3a5c;">Carga tu archivo Excel</h3>
+            <p style="color: #4a6a8a; max-width: 400px; margin: 0 auto;">
+                Sube un archivo con los casos para generar alertas de vencimiento de plazos.
+                Los correos se enviarán automáticamente a los equipos correspondientes.
+            </p>
+            <div style="margin-top: 20px; display: flex; gap: 12px; justify-content: center;">
+                <span class="badge-primary">TeamOwner</span>
+                <span class="badge-primary">Deadline</span>
+                <span class="badge-primary">Case Status</span>
+            </div>
+        </div>
+        """, unsafe_allow_html=True)
 
-with col2:
+with col_info:
     st.markdown("""
-    ### 📋 Instrucciones
+    <div class="card">
+        <div class="card-title">📋 Instrucciones</div>
+        <ol style="margin: 0; padding-left: 18px; color: #2a3a4a; font-size: 14px; line-height: 1.8;">
+            <li>Configura tu <strong>correo</strong></li>
+            <li>Carga el archivo <strong>Excel</strong></li>
+            <li>Selecciona la <strong>fecha</strong></li>
+            <li>Simula o <strong>envía</strong></li>
+        </ol>
+    </div>
     
-    1. **Configura tu correo** en la barra lateral
-    2. **Carga el archivo Excel** con los datos
-    3. **Selecciona la fecha de referencia**
-    4. **Simula** para probar sin enviar
-    5. **Envía** para enviar correos reales
+    <div class="card">
+        <div class="card-title">📌 Columnas requeridas</div>
+        <ul style="margin: 0; padding-left: 18px; color: #2a3a4a; font-size: 13px; line-height: 1.8;">
+            <li><code>TeamOwner</code></li>
+            <li><code>Deadline</code></li>
+            <li><code>Case #</code></li>
+            <li><code>Case Type</code></li>
+            <li><code>Case Status</code></li>
+            <li><code>Office Name</code></li>
+        </ul>
+    </div>
     
-    ### 📌 Columnas requeridas en el Excel
-    - `TeamOwner`
-    - `Deadline`
-    - `Case #`
-    - `Case Type`
-    - `Case Status`
-    - `Office Name`
+    <div class="card">
+        <div class="card-title">🔄 Colores de alerta</div>
+        <div style="display: flex; flex-direction: column; gap: 6px;">
+            <div><span class="badge-urgent">🔴</span> Overdue (crítico)</div>
+            <div><span class="badge-warning">🟡</span> 3-5 días</div>
+            <div><span class="badge-primary">🔵</span> 6+ días</div>
+            <div><span class="badge-success">🟢</span> En tiempo</div>
+        </div>
+    </div>
     
-    ### 🔒 Seguridad
-    - Las credenciales no se guardan
-    - La conexión SMTP usa TLS
-    - Solo se usa durante la sesión
-    """)
+    <div class="card">
+        <div class="card-title">🔒 Seguridad</div>
+        <ul style="margin: 0; padding-left: 18px; color: #2a3a4a; font-size: 12px; line-height: 1.8;">
+            <li>🔐 TLS en conexión SMTP</li>
+            <li>🔑 Sin almacenamiento</li>
+            <li>🛡️ Solo sesión</li>
+        </ul>
+    </div>
+    """, unsafe_allow_html=True)
 
-st.markdown("---")
-st.caption("ST LEGAL Alert System - Versión Cloud | Desarrollado por Data & Efficiency Team")
+# ============================================================
+# FOOTER
+# ============================================================
+
+st.markdown(f"""
+<div class="footer">
+    ST LEGAL Alert System — Versión Cloud · Desarrollado por Data &amp; Efficiency Team
+    <br>
+    © {datetime.now().year} Community Law Group · All rights reserved
+</div>
+""", unsafe_allow_html=True)
