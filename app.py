@@ -1,6 +1,3 @@
-# st_legal_alert_system.py
-# Versión con logo funcional en correo (CID) y barra lateral mejorada
-
 import streamlit as st
 import pandas as pd
 import smtplib
