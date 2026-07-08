@@ -1,6 +1,3 @@
-# st_legal_alert_system.py
-# Versión con textos corregidos, contraste mejorado y colores del correo
-
 import streamlit as st
 import pandas as pd
 import smtplib
