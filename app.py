@@ -1,6 +1,3 @@
-# st_legal_alert_system.py
-# Versión con barra lateral animada, colores vibrantes y logo en correo
-
 import streamlit as st
 import pandas as pd
 import smtplib
