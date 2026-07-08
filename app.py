@@ -1,5 +1,5 @@
 # st_legal_alert_system.py
-# Versión con modo oscuro y paleta de colores mejorada
+# Versión con colores semaforizados, textos grandes y animaciones
 
 import streamlit as st
 import pandas as pd
@@ -14,6 +14,7 @@ import os
 import json
 import re
 import requests
+import time
 
 # ============================================================
 # CONFIGURACIÓN
@@ -435,7 +436,7 @@ def procesar_alertas(df, fecha_referencia, smtp_username, smtp_password,
     return resultados, errores
 
 # ============================================================
-# INTERFAZ STREAMLIT - CON MODO OSCURO Y PALETA MEJORADA
+# INTERFAZ STREAMLIT - CON COLORES SEMAFORIZADOS Y ANIMACIONES
 # ============================================================
 
 st.set_page_config(
@@ -446,341 +447,466 @@ st.set_page_config(
 )
 
 # ============================================================
-# PALETA DE COLORES (MODO CLARO / OSCURO)
+# PALETA DE COLORES - SEMAFORIZADA (ROJO, AMARILLO, VERDE, AZUL)
 # ============================================================
 
 def get_colors(dark_mode=False):
     if dark_mode:
         return {
-            "bg": "#0e1117",
-            "card_bg": "#1c1c1e",
-            "card_border": "#2c2c2e",
+            "bg": "#0a0e14",
+            "card_bg": "#161a22",
+            "card_border": "#2a303a",
             "text_primary": "#e8edf2",
-            "text_secondary": "#9aa4b8",
-            "primary": "#4a7c9c",
-            "primary_dark": "#1a3a5c",
-            "secondary": "#6a9fc7",
-            "accent": "#e67e22",
+            "text_secondary": "#8a9bb0",
+            "text_dark": "#f0f4f8",
+            "blue": "#4a8bc2",
+            "blue_dark": "#2a5a7a",
+            "red": "#e74c3c",
+            "red_dark": "#a93226",
+            "yellow": "#f1c40f",
+            "yellow_dark": "#b7950b",
+            "green": "#2ecc71",
+            "green_dark": "#1a7a42",
             "urgent": "#e74c3c",
+            "warning": "#f39c12",
             "success": "#2ecc71",
             "info": "#3498db",
-            "warning": "#f39c12",
-            "header_bg": "#1a1a1e",
-            "banner_grad1": "#1a3a5c",
-            "banner_grad2": "#4a7c9c",
-            "metric_bg": "#252528",
-            "shadow": "rgba(0,0,0,0.4)"
+            "header_bg": "#0d1117",
+            "banner_grad1": "#1a2744",
+            "banner_grad2": "#2a4a6a",
+            "metric_bg": "#1c2430",
+            "shadow": "rgba(0,0,0,0.6)"
         }
     else:
         return {
-            "bg": "#f0f4f8",
+            "bg": "#e8edf2",
             "card_bg": "#ffffff",
-            "card_border": "#e8edf2",
+            "card_border": "#c8d0d8",
             "text_primary": "#1a2a3a",
-            "text_secondary": "#4a6a8a",
-            "primary": "#1a3a5c",
-            "primary_dark": "#0d1f33",
-            "secondary": "#4a7c9c",
-            "accent": "#e67e22",
+            "text_secondary": "#4a5a6a",
+            "text_dark": "#0d1a2a",
+            "blue": "#1a4a7a",
+            "blue_dark": "#0d2a4a",
+            "red": "#c0392b",
+            "red_dark": "#922b21",
+            "yellow": "#d4ac0d",
+            "yellow_dark": "#9a7d0a",
+            "green": "#1e8449",
+            "green_dark": "#145a32",
             "urgent": "#c0392b",
+            "warning": "#e67e22",
             "success": "#27ae60",
             "info": "#1e40af",
-            "warning": "#e67e22",
-            "header_bg": "#ffffff",
+            "header_bg": "#f0f4f8",
             "banner_grad1": "#1a3a5c",
             "banner_grad2": "#4a7c9c",
-            "metric_bg": "#f0f4f8",
-            "shadow": "rgba(0,0,0,0.08)"
+            "metric_bg": "#eef2f6",
+            "shadow": "rgba(0,0,0,0.1)"
         }
 
 # ============================================================
-# INICIALIZAR ESTADO DEL MODO OSCURO
+# INICIALIZAR ESTADO
 # ============================================================
 
 if 'dark_mode' not in st.session_state:
     st.session_state.dark_mode = False
 
 # ============================================================
-# BANNER
+# CSS CON ANIMACIONES Y COLORES SEMAFORIZADOS
 # ============================================================
 
-banner_base64 = get_banner_base64()
-colors = get_colors(st.session_state.dark_mode)
-
-# ============================================================
-# CSS DINÁMICO (se adapta al modo oscuro/claro)
-# ============================================================
-
-st.markdown(f"""
-<style>
-    /* Ocultar elementos */
-    #MainMenu {{ visibility: hidden; }}
-    footer {{ visibility: hidden; }}
-    
-    /* Fondo general */
-    .stApp {{
-        background-color: {colors['bg']};
-    }}
-    
-    /* Tarjetas */
-    .card {{
-        background-color: {colors['card_bg']};
-        border-radius: 12px;
-        padding: 20px 24px;
-        box-shadow: 0 2px 8px {colors['shadow']};
-        border: 1px solid {colors['card_border']};
-        margin-bottom: 16px;
-    }}
-    
-    .card-title {{
-        color: {colors['text_primary']};
-        font-size: 16px;
-        font-weight: 600;
-        margin-bottom: 8px;
-    }}
-    
-    /* Métricas */
-    .metric-container {{
-        background-color: {colors['metric_bg']};
-        border-radius: 10px;
-        padding: 16px 20px;
-        text-align: center;
-        border: 1px solid {colors['card_border']};
-    }}
-    
-    .metric-value {{
-        font-size: 28px;
-        font-weight: 700;
-        color: {colors['primary']};
-    }}
-    
-    .metric-label {{
-        font-size: 12px;
-        color: {colors['text_secondary']};
-        text-transform: uppercase;
-        letter-spacing: 0.5px;
-        font-weight: 600;
-    }}
-    
-    /* Textos */
-    .text-primary {{ color: {colors['text_primary']}; }}
-    .text-secondary {{ color: {colors['text_secondary']}; }}
-    
-    /* Badges */
-    .badge-active {{
-        background-color: rgba(46, 204, 113, 0.15);
-        color: {colors['success']};
-        padding: 4px 14px;
-        border-radius: 20px;
-        font-size: 12px;
-        font-weight: 600;
-        border: 1px solid rgba(46, 204, 113, 0.2);
-    }}
-    
-    .badge-urgent {{
-        background-color: rgba(192, 57, 43, 0.12);
-        color: {colors['urgent']};
-        padding: 4px 14px;
-        border-radius: 20px;
-        font-size: 12px;
-        font-weight: 600;
-    }}
-    
-    .badge-warning {{
-        background-color: rgba(230, 126, 34, 0.12);
-        color: {colors['warning']};
-        padding: 4px 14px;
-        border-radius: 20px;
-        font-size: 12px;
-        font-weight: 600;
-    }}
-    
-    .badge-info {{
-        background-color: rgba(52, 152, 219, 0.12);
-        color: {colors['info']};
-        padding: 4px 14px;
-        border-radius: 20px;
-        font-size: 12px;
-        font-weight: 600;
-    }}
-    
-    /* Botones */
-    .stButton > button {{
-        border-radius: 8px !important;
-        font-weight: 600 !important;
-        transition: all 0.3s ease !important;
-        border: none !important;
-    }}
-    
-    .stButton > button:hover {{
-        transform: translateY(-2px) !important;
-        box-shadow: 0 4px 12px rgba(0,0,0,0.15) !important;
-    }}
-    
-    /* Resultados */
-    .result-success {{
-        background-color: rgba(46, 204, 113, 0.10);
-        border-left: 4px solid {colors['success']};
-        padding: 12px 16px;
-        border-radius: 4px;
-        margin: 4px 0;
-        color: {colors['text_primary']};
-    }}
-    
-    .result-error {{
-        background-color: rgba(231, 76, 60, 0.10);
-        border-left: 4px solid {colors['urgent']};
-        padding: 12px 16px;
-        border-radius: 4px;
-        margin: 4px 0;
-        color: {colors['text_primary']};
-    }}
-    
-    .result-info {{
-        background-color: rgba(52, 152, 219, 0.10);
-        border-left: 4px solid {colors['info']};
-        padding: 12px 16px;
-        border-radius: 4px;
-        margin: 4px 0;
-        color: {colors['text_primary']};
-    }}
-    
-    /* Sidebar */
-    .css-1d391kg {{
-        background-color: {colors['card_bg']} !important;
-        border-right: 1px solid {colors['card_border']} !important;
-    }}
-    
-    /* Upload */
-    .upload-container {{
-        border: 2px dashed {colors['card_border']};
-        border-radius: 12px;
-        padding: 40px;
-        text-align: center;
-        background-color: {colors['bg']};
-        transition: all 0.3s ease;
-    }}
-    
-    .upload-container:hover {{
-        border-color: {colors['secondary']};
-        background-color: {colors['metric_bg']};
-    }}
-    
-    /* Footer */
-    .footer {{
-        text-align: center;
-        padding: 16px;
-        color: {colors['text_secondary']};
-        font-size: 12px;
-        border-top: 1px solid {colors['card_border']};
-        margin-top: 30px;
-    }}
-    
-    /* Headers */
-    h1, h2, h3, h4 {{
-        color: {colors['text_primary']} !important;
-    }}
-    
-    /* Labels y texto de Streamlit */
-    .stMarkdown, .stText, .stCaption, label {{
-        color: {colors['text_secondary']} !important;
-    }}
-    
-    /* Inputs */
-    .stTextInput > div > div > input {{
-        background-color: {colors['bg']} !important;
-        color: {colors['text_primary']} !important;
-        border-color: {colors['card_border']} !important;
-    }}
-    
-    .stDateInput > div > div > input {{
-        background-color: {colors['bg']} !important;
-        color: {colors['text_primary']} !important;
-        border-color: {colors['card_border']} !important;
-    }}
-    
-    /* Checkbox */
-    .stCheckbox label {{
-        color: {colors['text_secondary']} !important;
-    }}
-    
-    /* File uploader */
-    .stFileUploader > div > button {{
-        background-color: {colors['bg']} !important;
-        color: {colors['text_primary']} !important;
-        border-color: {colors['card_border']} !important;
-    }}
-</style>
-""", unsafe_allow_html=True)
+def inject_css(colors):
+    st.markdown(f"""
+    <style>
+        /* ===== OCULTAR ELEMENTOS ===== */
+        #MainMenu {{ visibility: hidden; }}
+        footer {{ visibility: hidden; }}
+        
+        /* ===== FONDO ===== */
+        .stApp {{
+            background-color: {colors['bg']};
+        }}
+        
+        /* ===== ANIMACIONES ===== */
+        @keyframes fadeInUp {{
+            from {{ opacity: 0; transform: translateY(20px); }}
+            to {{ opacity: 1; transform: translateY(0); }}
+        }}
+        
+        @keyframes pulse {{
+            0% {{ transform: scale(1); }}
+            50% {{ transform: scale(1.03); }}
+            100% {{ transform: scale(1); }}
+        }}
+        
+        @keyframes glow {{
+            0% {{ box-shadow: 0 0 5px rgba(231, 76, 60, 0.3); }}
+            50% {{ box-shadow: 0 0 20px rgba(231, 76, 60, 0.6); }}
+            100% {{ box-shadow: 0 0 5px rgba(231, 76, 60, 0.3); }}
+        }}
+        
+        @keyframes slideIn {{
+            from {{ opacity: 0; transform: translateX(-20px); }}
+            to {{ opacity: 1; transform: translateX(0); }}
+        }}
+        
+        .animate {{ animation: fadeInUp 0.6s ease-out; }}
+        .animate-delay-1 {{ animation-delay: 0.1s; }}
+        .animate-delay-2 {{ animation-delay: 0.2s; }}
+        .animate-delay-3 {{ animation-delay: 0.3s; }}
+        .animate-delay-4 {{ animation-delay: 0.4s; }}
+        
+        /* ===== TARJETAS ===== */
+        .card {{
+            background-color: {colors['card_bg']};
+            border-radius: 14px;
+            padding: 22px 26px;
+            box-shadow: 0 4px 12px {colors['shadow']};
+            border: 1px solid {colors['card_border']};
+            margin-bottom: 16px;
+            animation: fadeInUp 0.5s ease-out;
+            transition: all 0.3s ease;
+        }}
+        
+        .card:hover {{
+            transform: translateY(-2px);
+            box-shadow: 0 8px 25px {colors['shadow']};
+        }}
+        
+        .card-title {{
+            color: {colors['text_primary']};
+            font-size: 18px;
+            font-weight: 700;
+            margin-bottom: 10px;
+            border-bottom: 2px solid {colors['card_border']};
+            padding-bottom: 10px;
+        }}
+        
+        /* ===== MÉTRICAS SEMAFORIZADAS ===== */
+        .metric-container {{
+            border-radius: 12px;
+            padding: 18px 16px;
+            text-align: center;
+            border: 2px solid {colors['card_border']};
+            background-color: {colors['metric_bg']};
+            transition: all 0.3s ease;
+            animation: fadeInUp 0.5s ease-out;
+            min-height: 100px;
+            display: flex;
+            flex-direction: column;
+            justify-content: center;
+        }}
+        
+        .metric-container:hover {{
+            transform: translateY(-4px);
+            box-shadow: 0 6px 20px {colors['shadow']};
+        }}
+        
+        .metric-value {{
+            font-size: 38px;
+            font-weight: 800;
+            line-height: 1.2;
+        }}
+        
+        .metric-label {{
+            font-size: 14px;
+            font-weight: 700;
+            text-transform: uppercase;
+            letter-spacing: 0.8px;
+            margin-top: 4px;
+        }}
+        
+        /* ===== SEMÁFOROS ===== */
+        .metric-red .metric-value {{ color: {colors['red']}; }}
+        .metric-red .metric-label {{ color: {colors['red_dark']}; }}
+        .metric-red {{ border-color: {colors['red']}; }}
+        .metric-red:hover {{ border-color: {colors['red_dark']}; box-shadow: 0 6px 20px rgba(192, 57, 43, 0.25); }}
+        
+        .metric-yellow .metric-value {{ color: {colors['yellow_dark']}; }}
+        .metric-yellow .metric-label {{ color: {colors['yellow_dark']}; }}
+        .metric-yellow {{ border-color: {colors['yellow']}; }}
+        .metric-yellow:hover {{ border-color: {colors['yellow_dark']}; box-shadow: 0 6px 20px rgba(212, 172, 13, 0.25); }}
+        
+        .metric-green .metric-value {{ color: {colors['green']}; }}
+        .metric-green .metric-label {{ color: {colors['green_dark']}; }}
+        .metric-green {{ border-color: {colors['green']}; }}
+        .metric-green:hover {{ border-color: {colors['green_dark']}; box-shadow: 0 6px 20px rgba(30, 132, 73, 0.25); }}
+        
+        .metric-blue .metric-value {{ color: {colors['blue']}; }}
+        .metric-blue .metric-label {{ color: {colors['blue_dark']}; }}
+        .metric-blue {{ border-color: {colors['blue']}; }}
+        .metric-blue:hover {{ border-color: {colors['blue_dark']}; box-shadow: 0 6px 20px rgba(26, 74, 122, 0.25); }}
+        
+        /* ===== BADGES ===== */
+        .badge {{ padding: 6px 18px; border-radius: 30px; font-size: 13px; font-weight: 700; display: inline-block; }}
+        
+        .badge-active {{
+            background-color: rgba(46, 204, 113, 0.15);
+            color: {colors['green']};
+            border: 1px solid rgba(46, 204, 113, 0.3);
+        }}
+        
+        .badge-urgent {{
+            background-color: rgba(192, 57, 43, 0.15);
+            color: {colors['red']};
+            border: 1px solid rgba(192, 57, 43, 0.3);
+        }}
+        
+        .badge-warning {{
+            background-color: rgba(230, 126, 34, 0.15);
+            color: {colors['warning']};
+            border: 1px solid rgba(230, 126, 34, 0.3);
+        }}
+        
+        .badge-info {{
+            background-color: rgba(30, 64, 175, 0.12);
+            color: {colors['info']};
+            border: 1px solid rgba(30, 64, 175, 0.2);
+        }}
+        
+        /* ===== TEXTO ===== */
+        .text-primary {{ color: {colors['text_primary']} !important; font-weight: 600; }}
+        .text-secondary {{ color: {colors['text_secondary']} !important; }}
+        .text-large {{ font-size: 18px; line-height: 1.6; }}
+        .text-dark {{ color: {colors['text_dark']} !important; font-weight: 700; }}
+        
+        /* ===== BOTONES ===== */
+        .stButton > button {{
+            border-radius: 10px !important;
+            font-weight: 700 !important;
+            font-size: 16px !important;
+            padding: 10px 24px !important;
+            transition: all 0.3s ease !important;
+            border: none !important;
+        }}
+        
+        .stButton > button:hover {{
+            transform: translateY(-3px) !important;
+            box-shadow: 0 6px 20px {colors['shadow']} !important;
+        }}
+        
+        .stButton > button:active {{
+            transform: scale(0.97) !important;
+        }}
+        
+        /* ===== INPUTS ===== */
+        .stTextInput > div > div > input {{
+            background-color: {colors['bg']} !important;
+            color: {colors['text_primary']} !important;
+            border-color: {colors['card_border']} !important;
+            border-radius: 8px !important;
+            padding: 10px 14px !important;
+            font-size: 15px !important;
+        }}
+        
+        .stDateInput > div > div > input {{
+            background-color: {colors['bg']} !important;
+            color: {colors['text_primary']} !important;
+            border-color: {colors['card_border']} !important;
+            border-radius: 8px !important;
+            padding: 10px 14px !important;
+            font-size: 15px !important;
+        }}
+        
+        .stFileUploader > div > button {{
+            background-color: {colors['bg']} !important;
+            color: {colors['text_primary']} !important;
+            border-color: {colors['card_border']} !important;
+            border-radius: 8px !important;
+        }}
+        
+        /* ===== CHECKBOX ===== */
+        .stCheckbox label {{
+            color: {colors['text_secondary']} !important;
+            font-weight: 600 !important;
+            font-size: 14px !important;
+        }}
+        
+        /* ===== RESULTADOS ===== */
+        .result-success {{
+            background-color: rgba(46, 204, 113, 0.10);
+            border-left: 6px solid {colors['green']};
+            padding: 14px 18px;
+            border-radius: 6px;
+            margin: 6px 0;
+            color: {colors['text_primary']};
+            font-size: 15px;
+            font-weight: 500;
+            animation: slideIn 0.4s ease-out;
+        }}
+        
+        .result-error {{
+            background-color: rgba(231, 76, 60, 0.10);
+            border-left: 6px solid {colors['red']};
+            padding: 14px 18px;
+            border-radius: 6px;
+            margin: 6px 0;
+            color: {colors['text_primary']};
+            font-size: 15px;
+            font-weight: 500;
+            animation: slideIn 0.4s ease-out;
+        }}
+        
+        .result-info {{
+            background-color: rgba(52, 152, 219, 0.10);
+            border-left: 6px solid {colors['info']};
+            padding: 14px 18px;
+            border-radius: 6px;
+            margin: 6px 0;
+            color: {colors['text_primary']};
+            font-size: 15px;
+            font-weight: 500;
+            animation: slideIn 0.4s ease-out;
+        }}
+        
+        /* ===== SIDEBAR ===== */
+        .css-1d391kg {{
+            background-color: {colors['card_bg']} !important;
+            border-right: 1px solid {colors['card_border']} !important;
+        }}
+        
+        /* ===== FOOTER ===== */
+        .footer {{
+            text-align: center;
+            padding: 20px;
+            color: {colors['text_secondary']};
+            font-size: 13px;
+            border-top: 2px solid {colors['card_border']};
+            margin-top: 30px;
+            animation: fadeInUp 0.6s ease-out;
+        }}
+        
+        /* ===== HEADERS ===== */
+        h1, h2, h3, h4, h5, h6 {{
+            color: {colors['text_primary']} !important;
+            font-weight: 700 !important;
+        }}
+        
+        .stMarkdown, .stText, .stCaption, label {{
+            color: {colors['text_secondary']} !important;
+        }}
+        
+        /* ===== BANNER ===== */
+        .banner-container {{
+            border-radius: 14px;
+            overflow: hidden;
+            margin-bottom: 25px;
+            animation: fadeInUp 0.5s ease-out;
+            box-shadow: 0 4px 20px {colors['shadow']};
+        }}
+        
+        /* ===== EXPANDER ===== */
+        .streamlit-expanderHeader {{
+            color: {colors['text_primary']} !important;
+            font-weight: 700 !important;
+            font-size: 15px !important;
+            background-color: {colors['metric_bg']} !important;
+            border-radius: 8px !important;
+        }}
+        
+        /* ===== DATA FRAME ===== */
+        .stDataFrame {{
+            border-radius: 10px !important;
+            overflow: hidden !important;
+        }}
+        
+        .stDataFrame table {{
+            font-size: 14px !important;
+        }}
+        
+        /* ===== SPINNER ===== */
+        .stSpinner > div {{
+            border-color: {colors['blue']} !important;
+        }}
+    </style>
+    """, unsafe_allow_html=True)
 
 # ============================================================
 # BANNER CON IMAGEN O RESPALDO
 # ============================================================
 
-if banner_base64:
-    st.markdown(f"""
-    <div style="width: 100%; margin-bottom: 20px; border-radius: 12px; overflow: hidden; box-shadow: 0 4px 15px {colors['shadow']};">
-        <img src="{banner_base64}" alt="ST LEGAL Alert System" style="width: 100%; height: auto; display: block;">
-    </div>
-    """, unsafe_allow_html=True)
-else:
-    st.markdown(f"""
-    <div style="
-        background: linear-gradient(135deg, {colors['banner_grad1']}, {colors['banner_grad2']});
-        padding: 35px 45px;
-        border-radius: 12px;
-        margin-bottom: 25px;
-        box-shadow: 0 4px 15px {colors['shadow']};
-    ">
-        <div style="display: flex; align-items: center; justify-content: space-between; flex-wrap: wrap; gap: 15px;">
-            <div>
-                <h1 style="color: white; font-size: 30px; font-weight: 700; margin: 0; letter-spacing: -0.5px;">
-                    ⚖️ ST LEGAL
-                </h1>
-                <p style="color: rgba(255,255,255,0.9); font-size: 15px; margin: 4px 0 0 0;">
-                    Deadline and Case Management System
-                </p>
-            </div>
-            <div style="display: flex; gap: 12px; align-items: center; flex-wrap: wrap;">
-                <span style="
-                    background: rgba(255,255,255,0.2);
-                    color: white;
-                    padding: 6px 18px;
-                    border-radius: 30px;
-                    font-size: 13px;
-                    font-weight: 600;
-                ">v1.0</span>
-                <span style="
-                    background: rgba(46, 204, 113, 0.3);
-                    color: #2ecc71;
-                    padding: 6px 18px;
-                    border-radius: 30px;
-                    font-size: 13px;
-                    font-weight: 600;
-                    border: 1px solid rgba(46, 204, 113, 0.3);
-                ">● Active</span>
+def render_banner(colors):
+    banner_base64 = get_banner_base64()
+    
+    if banner_base64:
+        st.markdown(f"""
+        <div class="banner-container">
+            <img src="{banner_base64}" alt="ST LEGAL Alert System" style="width: 100%; height: auto; display: block;">
+        </div>
+        """, unsafe_allow_html=True)
+    else:
+        st.markdown(f"""
+        <div style="
+            background: linear-gradient(135deg, {colors['banner_grad1']}, {colors['banner_grad2']});
+            padding: 40px 50px;
+            border-radius: 14px;
+            margin-bottom: 25px;
+            box-shadow: 0 6px 25px {colors['shadow']};
+            animation: fadeInUp 0.5s ease-out;
+        ">
+            <div style="display: flex; align-items: center; justify-content: space-between; flex-wrap: wrap; gap: 15px;">
+                <div>
+                    <h1 style="color: white; font-size: 34px; font-weight: 800; margin: 0; letter-spacing: -0.5px; text-shadow: 0 2px 4px rgba(0,0,0,0.2);">
+                        ⚖️ ST LEGAL
+                    </h1>
+                    <p style="color: rgba(255,255,255,0.95); font-size: 17px; margin: 6px 0 0 0; font-weight: 500;">
+                        Deadline and Case Management System
+                    </p>
+                </div>
+                <div style="display: flex; gap: 12px; align-items: center; flex-wrap: wrap;">
+                    <span style="
+                        background: rgba(255,255,255,0.2);
+                        color: white;
+                        padding: 8px 22px;
+                        border-radius: 30px;
+                        font-size: 14px;
+                        font-weight: 700;
+                        backdrop-filter: blur(4px);
+                    ">v2.0</span>
+                    <span style="
+                        background: rgba(46, 204, 113, 0.3);
+                        color: #2ecc71;
+                        padding: 8px 22px;
+                        border-radius: 30px;
+                        font-size: 14px;
+                        font-weight: 700;
+                        border: 1px solid rgba(46, 204, 113, 0.3);
+                        backdrop-filter: blur(4px);
+                        animation: pulse 2s infinite;
+                    ">● Active</span>
+                </div>
             </div>
         </div>
-    </div>
-    """, unsafe_allow_html=True)
+        """, unsafe_allow_html=True)
 
 # ============================================================
-# SIDEBAR - CON TOGGLE DE MODO OSCURO
+# CONFIGURACIÓN Y RENDERIZADO
+# ============================================================
+
+# Obtener colores según modo
+colors = get_colors(st.session_state.dark_mode)
+
+# Inyectar CSS
+inject_css(colors)
+
+# Renderizar banner
+render_banner(colors)
+
+# ============================================================
+# SIDEBAR
 # ============================================================
 
 with st.sidebar:
     st.markdown(f"""
-    <div style="text-align: center; padding: 4px 0 12px 0;">
-        <div style="font-weight: 700; color: {colors['primary']}; font-size: 20px;">⚖️ ST LEGAL</div>
-        <div style="font-size: 11px; color: {colors['text_secondary']}; letter-spacing: 0.5px;">ALERT SYSTEM</div>
+    <div style="text-align: center; padding: 8px 0 16px 0;">
+        <div style="font-weight: 800; color: {colors['text_primary']}; font-size: 22px; letter-spacing: -0.3px;">⚖️ ST LEGAL</div>
+        <div style="font-size: 12px; color: {colors['text_secondary']}; letter-spacing: 0.8px; font-weight: 600;">ALERT SYSTEM</div>
     </div>
     """, unsafe_allow_html=True)
     
     st.markdown("---")
     
-    # ============================================================
-    # Toggle de modo oscuro
-    # ============================================================
+    # Toggle modo oscuro
     dark_mode_toggle = st.toggle("🌙 Modo oscuro", value=st.session_state.dark_mode)
     if dark_mode_toggle != st.session_state.dark_mode:
         st.session_state.dark_mode = dark_mode_toggle
@@ -788,27 +914,23 @@ with st.sidebar:
     
     st.markdown("---")
     
-    st.markdown("### 📧 Correo")
+    st.markdown(f"<div style='font-weight: 700; color: {colors['text_primary']}; font-size: 15px;'>📧 Correo</div>", unsafe_allow_html=True)
     smtp_username = st.text_input("Usuario", value="", placeholder="tu@email.com", label_visibility="collapsed")
-    st.caption("Correo de Outlook")
-    
     smtp_password = st.text_input("Contraseña", type="password", placeholder="••••••••", label_visibility="collapsed")
-    st.caption("Contraseña de Outlook")
     
     st.markdown("---")
     
-    st.markdown("### 📁 Datos")
+    st.markdown(f"<div style='font-weight: 700; color: {colors['text_primary']}; font-size: 15px;'>📁 Datos</div>", unsafe_allow_html=True)
     uploaded_file = st.file_uploader("Archivo Excel", type=['xlsx', 'xls'], label_visibility="collapsed")
-    st.caption("Carga tu archivo de casos")
     
     st.markdown("---")
     
-    st.markdown("### ⚙️ Fecha")
+    st.markdown(f"<div style='font-weight: 700; color: {colors['text_primary']}; font-size: 15px;'>⚙️ Fecha</div>", unsafe_allow_html=True)
     fecha_referencia = st.date_input("Referencia", value=datetime.now().date(), label_visibility="collapsed")
     
     st.markdown("---")
     
-    test_mode = st.checkbox("Modo prueba", help="Envía a un solo correo de prueba")
+    test_mode = st.checkbox("🔬 Modo prueba", help="Envía a un solo correo de prueba")
     test_email = st.text_input("Correo de prueba", placeholder="test@email.com") if test_mode else None
     
     st.markdown("---")
@@ -829,52 +951,58 @@ with st.sidebar:
 if uploaded_file is not None:
     df = pd.read_excel(uploaded_file)
     
-    # Métricas
+    # ===== MÉTRICAS CON SEMÁFOROS =====
+    st.markdown(f"<div class='text-large text-primary' style='font-weight: 700; font-size: 20px; margin-bottom: 16px;'>📊 Resumen de datos</div>", unsafe_allow_html=True)
+    
     col_m1, col_m2, col_m3, col_m4 = st.columns(4)
     
+    # Total registros - AZUL
     with col_m1:
         st.markdown(f"""
-        <div class="metric-container">
+        <div class="metric-container metric-blue animate animate-delay-1">
             <div class="metric-value">{len(df)}</div>
             <div class="metric-label">Registros</div>
         </div>
         """, unsafe_allow_html=True)
     
+    # Equipos - VERDE
     if 'TeamOwner' in df.columns:
         teams = df['TeamOwner'].dropna().unique()
         with col_m2:
             st.markdown(f"""
-            <div class="metric-container">
+            <div class="metric-container metric-green animate animate-delay-2">
                 <div class="metric-value">{len(teams)}</div>
                 <div class="metric-label">Equipos</div>
             </div>
             """, unsafe_allow_html=True)
     
+    # RFE - AMARILLO
     if 'Case Status' in df.columns:
         rfe_count = df['Case Status'].astype(str).str.upper().str.contains('RFE', na=False).sum()
         with col_m3:
             st.markdown(f"""
-            <div class="metric-container">
+            <div class="metric-container metric-yellow animate animate-delay-3">
                 <div class="metric-value">{rfe_count}</div>
                 <div class="metric-label">RFE</div>
             </div>
             """, unsafe_allow_html=True)
     
+    # On Time - VERDE
     if 'Desktime' in df.columns:
         on_time = len(df[df['Desktime'] == 'On time'])
         with col_m4:
             st.markdown(f"""
-            <div class="metric-container">
+            <div class="metric-container metric-green animate animate-delay-4">
                 <div class="metric-value">{on_time}</div>
                 <div class="metric-label">On Time</div>
             </div>
             """, unsafe_allow_html=True)
     
-    # Vista previa
+    # ===== VISTA PREVIA =====
     with st.expander("👁️ Vista previa de datos"):
         st.dataframe(df.head(10), use_container_width=True)
     
-    # Procesar
+    # ===== PROCESAR =====
     if enviar_reales or simular:
         if enviar_reales and (not smtp_username or not smtp_password):
             st.error("⚠️ Ingresa tus credenciales de Outlook para enviar correos reales")
@@ -886,7 +1014,7 @@ if uploaded_file is not None:
                 )
             
             st.markdown("---")
-            st.markdown("### 📋 Resultados")
+            st.markdown(f"<div style='font-weight: 700; color: {colors['text_primary']}; font-size: 20px;'>📋 Resultados</div>", unsafe_allow_html=True)
             
             if errores:
                 for err in errores:
@@ -906,23 +1034,25 @@ if uploaded_file is not None:
                 st.success("🎉 Proceso completado exitosamente")
 
 else:
+    # ===== ESTADO INICIAL =====
     st.markdown(f"""
     <div style="
         text-align: center;
-        padding: 80px 30px;
+        padding: 100px 30px;
         background-color: {colors['card_bg']};
-        border-radius: 12px;
-        border: 1px solid {colors['card_border']};
+        border-radius: 14px;
+        border: 2px dashed {colors['card_border']};
+        animation: fadeInUp 0.6s ease-out;
     ">
-        <div style="font-size: 64px; margin-bottom: 20px;">📂</div>
-        <h2 style="color: {colors['text_primary']}; font-weight: 600; margin: 0;">Carga tu archivo Excel</h2>
-        <p style="color: {colors['text_secondary']}; margin: 8px 0 0 0;">
+        <div style="font-size: 72px; margin-bottom: 24px;">📂</div>
+        <h2 style="color: {colors['text_primary']}; font-weight: 800; margin: 0; font-size: 28px;">Carga tu archivo Excel</h2>
+        <p style="color: {colors['text_secondary']}; margin: 12px 0 0 0; font-size: 17px;">
             Sube un archivo con los casos para generar alertas de vencimiento
         </p>
-        <div style="margin-top: 16px; display: flex; gap: 10px; justify-content: center; flex-wrap: wrap;">
-            <span style="background: {colors['metric_bg']}; padding: 4px 16px; border-radius: 20px; font-size: 12px; color: {colors['text_secondary']};">TeamOwner</span>
-            <span style="background: {colors['metric_bg']}; padding: 4px 16px; border-radius: 20px; font-size: 12px; color: {colors['text_secondary']};">Deadline</span>
-            <span style="background: {colors['metric_bg']}; padding: 4px 16px; border-radius: 20px; font-size: 12px; color: {colors['text_secondary']};">Case Status</span>
+        <div style="margin-top: 20px; display: flex; gap: 12px; justify-content: center; flex-wrap: wrap;">
+            <span style="background: {colors['metric_bg']}; padding: 6px 20px; border-radius: 30px; font-size: 14px; font-weight: 600; color: {colors['text_secondary']};">TeamOwner</span>
+            <span style="background: {colors['metric_bg']}; padding: 6px 20px; border-radius: 30px; font-size: 14px; font-weight: 600; color: {colors['text_secondary']};">Deadline</span>
+            <span style="background: {colors['metric_bg']}; padding: 6px 20px; border-radius: 30px; font-size: 14px; font-weight: 600; color: {colors['text_secondary']};">Case Status</span>
         </div>
     </div>
     """, unsafe_allow_html=True)
@@ -933,7 +1063,7 @@ else:
 
 st.markdown(f"""
 <div class="footer">
-    ST LEGAL Alert System · Data &amp; Efficiency Team
+    <strong style="color: {colors['text_primary']};">ST LEGAL Alert System</strong> · Data &amp; Efficiency Team
     <br>
     © {datetime.now().year} Community Law Group
 </div>
