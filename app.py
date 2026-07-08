@@ -1,3 +1,6 @@
+# st_legal_alert_system.py
+# Versión con textos corregidos, contraste mejorado y colores del correo
+
 import streamlit as st
 import pandas as pd
 import smtplib
@@ -129,7 +132,6 @@ def generar_html_correo(team_cases, team_name, fecha_referencia, logo_cid=None):
     upcoming_count = len(upcoming)
     rfe_excluded = is_rfe.sum()
     
-    # Logo HTML con CID
     logo_html = ""
     if logo_cid:
         logo_html = f"""
@@ -335,7 +337,6 @@ def generar_html_correo(team_cases, team_name, fecha_referencia, logo_cid=None):
 
 def enviar_correo_smtp(smtp_server, smtp_port, username, password, to_emails, cc_emails,
                        subject, html_body, logo_bytes=None):
-    """Envía correo usando SMTP de Outlook con logo adjunto (CID)"""
     try:
         msg = MIMEMultipart('related')
         msg['Subject'] = subject
@@ -345,11 +346,9 @@ def enviar_correo_smtp(smtp_server, smtp_port, username, password, to_emails, cc
             msg['CC'] = ", ".join(cc_emails)
         msg['X-Priority'] = '1'
         
-        # Parte HTML
         html_part = MIMEText(html_body, 'html')
         msg.attach(html_part)
         
-        # Adjuntar logo con CID si existe
         if logo_bytes:
             logo_cid = "company_logo_cid"
             image_part = MIMEImage(logo_bytes)
@@ -357,7 +356,6 @@ def enviar_correo_smtp(smtp_server, smtp_port, username, password, to_emails, cc
             image_part.add_header('Content-Disposition', 'inline', filename='logo.png')
             msg.attach(image_part)
         
-        # Conectar y enviar
         context = ssl.create_default_context()
         with smtplib.SMTP(smtp_server, smtp_port) as server:
             server.starttls(context=context)
@@ -408,7 +406,6 @@ def procesar_alertas(df, fecha_referencia, smtp_username, smtp_password,
     if not alerts_by_team:
         return [], ["⚠️ No se encontraron equipos con alertas"]
     
-    # Obtener logo para el correo
     logo_bytes = get_logo_bytes()
     logo_cid = "company_logo_cid" if logo_bytes else None
     
@@ -452,7 +449,7 @@ def procesar_alertas(df, fecha_referencia, smtp_username, smtp_password,
     return resultados, errores
 
 # ============================================================
-# INTERFAZ STREAMLIT - CON BARRA LATERAL ANIMADA Y COLORES VIBRANTES
+# INTERFAZ STREAMLIT - CON TEXTOS CORREGIDOS Y CONTRASTE MEJORADO
 # ============================================================
 
 st.set_page_config(
@@ -463,7 +460,7 @@ st.set_page_config(
 )
 
 # ============================================================
-# PALETA DE COLORES
+# PALETA DE COLORES (CON CONTRASTE MEJORADO)
 # ============================================================
 
 def get_colors(dark_mode=False):
@@ -475,6 +472,8 @@ def get_colors(dark_mode=False):
             "text_primary": "#e8edf2",
             "text_secondary": "#8a9bb0",
             "text_dark": "#f0f4f8",
+            "text_sidebar": "#ffffff",  # Texto blanco para sidebar oscura
+            "sidebar_bg": "#0d1117",
             "blue": "#4a8bc2",
             "blue_dark": "#2a5a7a",
             "red": "#e74c3c",
@@ -495,17 +494,19 @@ def get_colors(dark_mode=False):
             "banner_grad2": "#2a4a6a",
             "metric_bg": "#1c2430",
             "shadow": "rgba(0,0,0,0.6)",
-            "sidebar_grad1": "#1a1a2e",
-            "sidebar_grad2": "#16213e"
+            "sidebar_grad1": "#0d1117",
+            "sidebar_grad2": "#161a22"
         }
     else:
         return {
             "bg": "#e8edf2",
             "card_bg": "#ffffff",
             "card_border": "#c8d0d8",
-            "text_primary": "#1a2a3a",
+            "text_primary": "#1a2a3a",      # Texto oscuro para modo claro
             "text_secondary": "#4a5a6a",
             "text_dark": "#0d1a2a",
+            "text_sidebar": "#1a2a3a",      # Texto oscuro para sidebar clara
+            "sidebar_bg": "#f0f4f8",
             "blue": "#1a4a7a",
             "blue_dark": "#0d2a4a",
             "red": "#c0392b",
@@ -526,8 +527,8 @@ def get_colors(dark_mode=False):
             "banner_grad2": "#4a7c9c",
             "metric_bg": "#eef2f6",
             "shadow": "rgba(0,0,0,0.1)",
-            "sidebar_grad1": "#1a3a5c",
-            "sidebar_grad2": "#2a5a7a"
+            "sidebar_grad1": "#e8edf2",
+            "sidebar_grad2": "#d5dde6"
         }
 
 # ============================================================
@@ -538,7 +539,7 @@ if 'dark_mode' not in st.session_state:
     st.session_state.dark_mode = False
 
 # ============================================================
-# CSS CON ANIMACIONES Y BARRA LATERAL MEJORADA
+# CSS CON TEXTOS CORREGIDOS Y CONTRASTE MEJORADO
 # ============================================================
 
 def inject_css(colors):
@@ -576,64 +577,54 @@ def inject_css(colors):
             to {{ opacity: 1; transform: translateX(0); }}
         }}
         
-        @keyframes borderGlow {{
-            0% {{ border-color: {colors['blue']}; }}
-            50% {{ border-color: {colors['purple']}; }}
-            100% {{ border-color: {colors['blue']}; }}
-        }}
-        
-        @keyframes shimmer {{
-            0% {{ background-position: -200% center; }}
-            100% {{ background-position: 200% center; }}
-        }}
-        
         .animate {{ animation: fadeInUp 0.6s ease-out; }}
         .animate-delay-1 {{ animation-delay: 0.1s; }}
         .animate-delay-2 {{ animation-delay: 0.2s; }}
         .animate-delay-3 {{ animation-delay: 0.3s; }}
         .animate-delay-4 {{ animation-delay: 0.4s; }}
         
-        /* ===== BARRA LATERAL - CON ANIMACIONES Y COLORES ===== */
+        /* ===== BARRA LATERAL - CON TEXTO OSCURO EN FONDO CLARO ===== */
         .css-1d391kg {{
             background: linear-gradient(180deg, {colors['sidebar_grad1']}, {colors['sidebar_grad2']}) !important;
             border-right: 2px solid {colors['blue']} !important;
             animation: fadeInUp 0.5s ease-out;
         }}
         
-        .css-1d391kg .stMarkdown, 
-        .css-1d391kg .stText, 
-        .css-1d391kg .stCaption, 
-        .css-1d391kg label {{
-            color: rgba(255,255,255,0.9) !important;
+        /* Todos los textos en la barra lateral - color oscuro para modo claro */
+        .css-1d391kg .stMarkdown,
+        .css-1d391kg .stText,
+        .css-1d391kg .stCaption,
+        .css-1d391kg label,
+        .css-1d391kg .stMarkdown p {{
+            color: {colors['text_sidebar']} !important;
         }}
         
-        /* Título de la barra lateral */
+        /* Título de la barra lateral - siempre visible */
         .sidebar-title {{
             text-align: center;
             padding: 16px 0 12px 0;
-            border-bottom: 2px solid rgba(255,255,255,0.1);
+            border-bottom: 2px solid {colors['blue']};
             margin-bottom: 16px;
             animation: pulse 3s infinite;
         }}
         
         .sidebar-title .main {{
             font-weight: 800;
-            color: #ffffff;
+            color: {colors['text_sidebar']};
             font-size: 24px;
             letter-spacing: -0.3px;
-            text-shadow: 0 2px 10px rgba(74, 139, 194, 0.3);
         }}
         
         .sidebar-title .sub {{
             font-size: 12px;
-            color: rgba(255,255,255,0.6);
+            color: {colors['text_secondary']};
             letter-spacing: 1.5px;
             font-weight: 600;
         }}
         
         /* Secciones de la barra lateral */
         .sidebar-section {{
-            background: rgba(255,255,255,0.05);
+            background: rgba(255,255,255,0.06);
             border-radius: 10px;
             padding: 12px 16px;
             margin-bottom: 12px;
@@ -644,7 +635,7 @@ def inject_css(colors):
         
         .sidebar-section:hover {{
             background: rgba(255,255,255,0.10);
-            border-color: rgba(74, 139, 194, 0.3);
+            border-color: {colors['blue']};
             transform: translateX(4px);
         }}
         
@@ -655,24 +646,25 @@ def inject_css(colors):
         
         .sidebar-section .label {{
             font-weight: 700;
-            color: #ffffff;
+            color: {colors['text_sidebar']};
             font-size: 14px;
         }}
         
         .sidebar-section .desc {{
             font-size: 12px;
-            color: rgba(255,255,255,0.6);
+            color: {colors['text_secondary']};
             margin-top: 2px;
         }}
         
-        /* Inputs en barra lateral */
+        /* Inputs en barra lateral - contraste mejorado */
         .css-1d391kg .stTextInput > div > div > input {{
-            background-color: rgba(255,255,255,0.08) !important;
-            color: #ffffff !important;
-            border-color: rgba(255,255,255,0.15) !important;
+            background-color: {colors['card_bg']} !important;
+            color: {colors['text_sidebar']} !important;
+            border-color: {colors['card_border']} !important;
             border-radius: 8px !important;
             padding: 10px 14px !important;
             font-size: 14px !important;
+            font-weight: 500 !important;
             transition: all 0.3s ease !important;
         }}
         
@@ -681,31 +673,39 @@ def inject_css(colors):
             box-shadow: 0 0 20px rgba(74, 139, 194, 0.2) !important;
         }}
         
+        .css-1d391kg .stTextInput > div > div > input::placeholder {{
+            color: {colors['text_secondary']} !important;
+            opacity: 0.7 !important;
+        }}
+        
         .css-1d391kg .stDateInput > div > div > input {{
-            background-color: rgba(255,255,255,0.08) !important;
-            color: #ffffff !important;
-            border-color: rgba(255,255,255,0.15) !important;
+            background-color: {colors['card_bg']} !important;
+            color: {colors['text_sidebar']} !important;
+            border-color: {colors['card_border']} !important;
             border-radius: 8px !important;
             padding: 10px 14px !important;
             font-size: 14px !important;
+            font-weight: 500 !important;
         }}
         
         .css-1d391kg .stFileUploader > div > button {{
-            background-color: rgba(255,255,255,0.08) !important;
-            color: #ffffff !important;
-            border-color: rgba(255,255,255,0.15) !important;
+            background-color: {colors['card_bg']} !important;
+            color: {colors['text_sidebar']} !important;
+            border-color: {colors['card_border']} !important;
             border-radius: 8px !important;
+            font-weight: 600 !important;
             transition: all 0.3s ease !important;
         }}
         
         .css-1d391kg .stFileUploader > div > button:hover {{
-            background-color: rgba(74, 139, 194, 0.2) !important;
+            background-color: {colors['blue']} !important;
+            color: white !important;
             border-color: {colors['blue']} !important;
         }}
         
         /* Checkbox en barra lateral */
         .css-1d391kg .stCheckbox label {{
-            color: rgba(255,255,255,0.9) !important;
+            color: {colors['text_sidebar']} !important;
             font-weight: 600 !important;
             font-size: 14px !important;
         }}
@@ -732,7 +732,7 @@ def inject_css(colors):
         
         .css-1d391kg .stButton > button:last-child {{
             background: rgba(255,255,255,0.10) !important;
-            color: #ffffff !important;
+            color: {colors['text_sidebar']} !important;
             border: 1px solid rgba(255,255,255,0.15) !important;
         }}
         
@@ -743,14 +743,16 @@ def inject_css(colors):
         
         /* Caption en barra lateral */
         .css-1d391kg .stCaption {{
-            color: rgba(255,255,255,0.4) !important;
+            color: {colors['text_secondary']} !important;
             font-size: 11px !important;
+            font-weight: 500 !important;
         }}
         
         /* Divider en barra lateral */
         .css-1d391kg hr {{
-            border-color: rgba(255,255,255,0.08) !important;
+            border-color: {colors['card_border']} !important;
             margin: 12px 0 !important;
+            opacity: 0.3 !important;
         }}
         
         /* ===== TARJETAS ===== */
@@ -1006,11 +1008,11 @@ inject_css(colors)
 render_banner(colors)
 
 # ============================================================
-# BARRA LATERAL - CON DISEÑO ANIMADO
+# BARRA LATERAL - CON TEXTO OSCURO EN MODO CLARO
 # ============================================================
 
 with st.sidebar:
-    # ===== TÍTULO DE BARRA LATERAL =====
+    # Título
     st.markdown(f"""
     <div class="sidebar-title">
         <div class="main">⚖️ ST LEGAL</div>
@@ -1018,7 +1020,7 @@ with st.sidebar:
     </div>
     """, unsafe_allow_html=True)
     
-    # ===== TOGGLE MODO OSCURO =====
+    # Modo oscuro
     st.markdown("""
     <div class="sidebar-section">
         <div style="display: flex; align-items: center; gap: 8px;">
@@ -1033,7 +1035,7 @@ with st.sidebar:
         st.session_state.dark_mode = dark_mode_toggle
         st.rerun()
     
-    # ===== CORREO =====
+    # Correo
     st.markdown("""
     <div class="sidebar-section">
         <div style="display: flex; align-items: center; gap: 8px;">
@@ -1047,7 +1049,7 @@ with st.sidebar:
     smtp_username = st.text_input("Usuario", value="", placeholder="tu@email.com", label_visibility="collapsed")
     smtp_password = st.text_input("Contraseña", type="password", placeholder="••••••••", label_visibility="collapsed")
     
-    # ===== DATOS =====
+    # Datos
     st.markdown("""
     <div class="sidebar-section">
         <div style="display: flex; align-items: center; gap: 8px;">
@@ -1060,7 +1062,7 @@ with st.sidebar:
     
     uploaded_file = st.file_uploader("Archivo Excel", type=['xlsx', 'xls'], label_visibility="collapsed")
     
-    # ===== FECHA =====
+    # Fecha
     st.markdown("""
     <div class="sidebar-section">
         <div style="display: flex; align-items: center; gap: 8px;">
@@ -1073,7 +1075,7 @@ with st.sidebar:
     
     fecha_referencia = st.date_input("Referencia", value=datetime.now().date(), label_visibility="collapsed")
     
-    # ===== MODO PRUEBA =====
+    # Modo prueba
     st.markdown("""
     <div class="sidebar-section">
         <div style="display: flex; align-items: center; gap: 8px;">
@@ -1087,7 +1089,7 @@ with st.sidebar:
     test_mode = st.checkbox("", label_visibility="collapsed")
     test_email = st.text_input("Correo de prueba", placeholder="test@email.com", label_visibility="collapsed") if test_mode else None
     
-    # ===== BOTONES =====
+    # Botones
     st.markdown("---")
     
     col_btn1, col_btn2 = st.columns(2)
@@ -1106,7 +1108,7 @@ with st.sidebar:
 if uploaded_file is not None:
     df = pd.read_excel(uploaded_file)
     
-    # ===== MÉTRICAS CON SEMÁFOROS =====
+    # Métricas
     st.markdown(f"<div class='text-large text-dark' style='font-weight: 700; font-size: 20px; margin-bottom: 16px;'>📊 Resumen de datos</div>", unsafe_allow_html=True)
     
     col_m1, col_m2, col_m3, col_m4 = st.columns(4)
@@ -1153,11 +1155,11 @@ if uploaded_file is not None:
             </div>
             """, unsafe_allow_html=True)
     
-    # ===== VISTA PREVIA =====
+    # Vista previa
     with st.expander("👁️ Vista previa de datos"):
         st.dataframe(df.head(10), use_container_width=True)
     
-    # ===== PROCESAR =====
+    # Procesar
     if enviar_reales or simular:
         if enviar_reales and (not smtp_username or not smtp_password):
             st.error("⚠️ Ingresa tus credenciales de Outlook para enviar correos reales")
@@ -1189,7 +1191,7 @@ if uploaded_file is not None:
                 st.success("🎉 Proceso completado exitosamente")
 
 else:
-    # ===== ESTADO INICIAL =====
+    # Estado inicial
     st.markdown(f"""
     <div style="
         text-align: center;
