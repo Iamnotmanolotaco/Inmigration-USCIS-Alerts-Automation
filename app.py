@@ -1,3 +1,6 @@
+# st_legal_alert_system.py
+# Versión con banner profesional y diseño minimalista
+
 import streamlit as st
 import pandas as pd
 import smtplib
@@ -20,17 +23,17 @@ import requests
 SMTP_SERVER = "smtp.office365.com"
 SMTP_PORT = 587
 
-# URL del logo en GitHub
+# URLs de GitHub
 URL_LOGO_GITHUB = "https://raw.githubusercontent.com/Iamnotmanolotaco/Inmigration-USCIS-Alerts-Automation/main/logo.png"
+URL_BANNER_GITHUB = "https://raw.githubusercontent.com/Iamnotmanolotaco/Inmigration-USCIS-Alerts-Automation/main/banner.png"
 
 DAYS_BEFORE = 7
 DAYS_AFTER = 30
 
 # ============================================================
-# CONFIGURACIÓN DE ESTILOS
+# COLORES CORPORATIVOS
 # ============================================================
 
-# Colores corporativos
 COLORS = {
     "primary": "#1a3a5c",
     "secondary": "#4a7c9c",
@@ -46,30 +49,36 @@ COLORS = {
 }
 
 # ============================================================
-# FUNCIÓN PARA OBTENER LOGO DESDE GITHUB
+# FUNCIONES PARA OBTENER RECURSOS DESDE GITHUB
 # ============================================================
 
-def get_logo_from_github(url):
-    """Descarga la imagen desde una URL de GitHub y la convierte a Base64."""
+def get_image_from_github(url):
+    """
+    Descarga una imagen desde GitHub y la convierte a Base64.
+    Retorna None si falla.
+    """
     try:
         response = requests.get(url, timeout=10)
         if response.status_code == 200:
             base64_string = base64.b64encode(response.content).decode('utf-8')
-            return f"data:image/png;base64,{base64_string}"
+            content_type = response.headers.get('Content-Type', 'image/png')
+            return f"data:{content_type};base64,{base64_string}"
         else:
             return None
     except Exception as e:
         return None
 
+def get_logo_base64():
+    """Obtiene el logo en Base64"""
+    return get_image_from_github(URL_LOGO_GITHUB)
+
+def get_banner_base64():
+    """Obtiene el banner en Base64"""
+    return get_image_from_github(URL_BANNER_GITHUB)
+
 # ============================================================
 # FUNCIONES DE UTILIDAD
 # ============================================================
-
-def formatear_mes(numero_mes):
-    meses = {1: 'enero', 2: 'febrero', 3: 'marzo', 4: 'abril',
-             5: 'mayo', 6: 'junio', 7: 'julio', 8: 'agosto',
-             9: 'septiembre', 10: 'octubre', 11: 'noviembre', 12: 'diciembre'}
-    return meses[numero_mes]
 
 def calcular_dias_hasta_deadline(deadline_str, fecha_referencia):
     if pd.isna(deadline_str) or deadline_str == "":
@@ -419,7 +428,7 @@ def procesar_alertas(df, fecha_referencia, smtp_username, smtp_password,
     if not alerts_by_team:
         return [], ["⚠️ No se encontraron equipos con alertas"]
     
-    logo_base64 = get_logo_from_github(URL_LOGO_GITHUB)
+    logo_base64 = get_logo_base64()
     
     for team_name, team_cases in alerts_by_team.items():
         html_body = generar_html_correo(team_cases, team_name, fecha_referencia, logo_base64)
@@ -461,10 +470,9 @@ def procesar_alertas(df, fecha_referencia, smtp_username, smtp_password,
     return resultados, errores
 
 # ============================================================
-# INTERFAZ STREAMLIT ELEGANTE
+# INTERFAZ STREAMLIT - PROFESIONAL Y MINIMALISTA
 # ============================================================
 
-# Configurar página
 st.set_page_config(
     page_title="ST LEGAL Alert System",
     page_icon="⚖️",
@@ -472,56 +480,82 @@ st.set_page_config(
     initial_sidebar_state="expanded"
 )
 
-# CSS personalizado para la interfaz
+# ============================================================
+# BANNER PROFESIONAL (con o sin imagen)
+# ============================================================
+
+banner_base64 = get_banner_base64()
+
+if banner_base64:
+    # Mostrar banner con imagen
+    st.markdown(f"""
+    <div style="width: 100%; margin-bottom: 20px; border-radius: 12px; overflow: hidden; box-shadow: 0 4px 15px rgba(0,0,0,0.08);">
+        <img src="{banner_base64}" alt="ST LEGAL Alert System" style="width: 100%; height: auto; display: block;">
+    </div>
+    """, unsafe_allow_html=True)
+else:
+    # Banner de respaldo (sin imagen)
+    st.markdown(f"""
+    <div style="
+        background: linear-gradient(135deg, {COLORS['primary']}, {COLORS['secondary']});
+        padding: 40px 50px;
+        border-radius: 12px;
+        margin-bottom: 25px;
+        box-shadow: 0 4px 15px rgba(26, 58, 92, 0.25);
+    ">
+        <div style="display: flex; align-items: center; justify-content: space-between; flex-wrap: wrap; gap: 15px;">
+            <div>
+                <h1 style="color: white; font-size: 32px; font-weight: 700; margin: 0; letter-spacing: -0.5px;">
+                    ⚖️ ST LEGAL
+                </h1>
+                <p style="color: rgba(255,255,255,0.9); font-size: 16px; margin: 4px 0 0 0;">
+                    Deadline and Case Management System
+                </p>
+            </div>
+            <div style="display: flex; gap: 12px; align-items: center;">
+                <span style="
+                    background: rgba(255,255,255,0.2);
+                    color: white;
+                    padding: 6px 18px;
+                    border-radius: 30px;
+                    font-size: 13px;
+                    font-weight: 600;
+                ">v1.0</span>
+                <span style="
+                    background: rgba(46, 204, 113, 0.3);
+                    color: #2ecc71;
+                    padding: 6px 18px;
+                    border-radius: 30px;
+                    font-size: 13px;
+                    font-weight: 600;
+                    border: 1px solid rgba(46, 204, 113, 0.3);
+                ">● Active</span>
+            </div>
+        </div>
+    </div>
+    """, unsafe_allow_html=True)
+
+# ============================================================
+# CSS PERSONALIZADO
+# ============================================================
+
 st.markdown(f"""
 <style>
+    /* Ocultar elementos de Streamlit que sobran */
+    #MainMenu {{ visibility: hidden; }}
+    footer {{ visibility: hidden; }}
+    
     /* Estilos generales */
     .main {{
-        background-color: #f0f4f8;
-    }}
-    
-    /* Encabezado */
-    .header-container {{
-        background: linear-gradient(135deg, {COLORS['primary']}, {COLORS['secondary']});
-        padding: 25px 30px;
-        border-radius: 15px;
-        margin-bottom: 25px;
-        display: flex;
-        align-items: center;
-        gap: 20px;
-        box-shadow: 0 4px 15px rgba(26, 58, 92, 0.3);
-    }}
-    
-    .header-logo {{
-        max-width: 80px;
-        height: auto;
-        background: white;
-        padding: 8px;
-        border-radius: 10px;
-        box-shadow: 0 2px 8px rgba(0,0,0,0.1);
-    }}
-    
-    .header-title {{
-        color: white !important;
-        font-size: 28px;
-        font-weight: 700;
-        margin: 0;
-        letter-spacing: -0.5px;
-    }}
-    
-    .header-subtitle {{
-        color: rgba(255,255,255,0.85) !important;
-        font-size: 14px;
-        margin: 4px 0 0 0;
-        font-weight: 400;
+        background-color: {COLORS['light_bg']};
     }}
     
     /* Tarjetas */
     .card {{
-        background-color: #ffffff;
+        background-color: {COLORS['card_bg']};
         border-radius: 12px;
         padding: 20px 24px;
-        box-shadow: 0 2px 10px rgba(0,0,0,0.05);
+        box-shadow: 0 2px 8px rgba(0,0,0,0.04);
         border: 1px solid #e8edf2;
         margin-bottom: 16px;
     }}
@@ -530,63 +564,7 @@ st.markdown(f"""
         color: {COLORS['primary']};
         font-size: 16px;
         font-weight: 600;
-        margin-bottom: 12px;
-        border-bottom: 2px solid #e8edf2;
-        padding-bottom: 8px;
-    }}
-    
-    /* Badges */
-    .badge-primary {{
-        background-color: {COLORS['primary']};
-        color: white;
-        padding: 4px 14px;
-        border-radius: 20px;
-        font-size: 12px;
-        font-weight: 600;
-        display: inline-block;
-    }}
-    
-    .badge-success {{
-        background-color: {COLORS['success']};
-        color: white;
-        padding: 4px 14px;
-        border-radius: 20px;
-        font-size: 12px;
-        font-weight: 600;
-        display: inline-block;
-    }}
-    
-    .badge-warning {{
-        background-color: {COLORS['warning']};
-        color: white;
-        padding: 4px 14px;
-        border-radius: 20px;
-        font-size: 12px;
-        font-weight: 600;
-        display: inline-block;
-    }}
-    
-    .badge-urgent {{
-        background-color: {COLORS['urgent']};
-        color: white;
-        padding: 4px 14px;
-        border-radius: 20px;
-        font-size: 12px;
-        font-weight: 600;
-        display: inline-block;
-    }}
-    
-    /* Botones */
-    .stButton > button {{
-        border-radius: 8px !important;
-        font-weight: 600 !important;
-        transition: all 0.3s ease !important;
-        border: none !important;
-    }}
-    
-    .stButton > button:hover {{
-        transform: translateY(-2px) !important;
-        box-shadow: 0 4px 12px rgba(0,0,0,0.15) !important;
+        margin-bottom: 8px;
     }}
     
     /* Métricas */
@@ -612,6 +590,85 @@ st.markdown(f"""
         font-weight: 600;
     }}
     
+    /* Badges de estado */
+    .badge-active {{
+        background-color: rgba(46, 204, 113, 0.15);
+        color: #27ae60;
+        padding: 4px 14px;
+        border-radius: 20px;
+        font-size: 12px;
+        font-weight: 600;
+        border: 1px solid rgba(46, 204, 113, 0.2);
+    }}
+    
+    .badge-urgent {{
+        background-color: rgba(192, 57, 43, 0.12);
+        color: {COLORS['urgent']};
+        padding: 4px 14px;
+        border-radius: 20px;
+        font-size: 12px;
+        font-weight: 600;
+    }}
+    
+    .badge-warning {{
+        background-color: rgba(230, 126, 34, 0.12);
+        color: {COLORS['warning']};
+        padding: 4px 14px;
+        border-radius: 20px;
+        font-size: 12px;
+        font-weight: 600;
+    }}
+    
+    .badge-info {{
+        background-color: rgba(30, 64, 175, 0.10);
+        color: {COLORS['info']};
+        padding: 4px 14px;
+        border-radius: 20px;
+        font-size: 12px;
+        font-weight: 600;
+    }}
+    
+    /* Botones */
+    .stButton > button {{
+        border-radius: 8px !important;
+        font-weight: 600 !important;
+        transition: all 0.3s ease !important;
+        border: none !important;
+    }}
+    
+    .stButton > button:hover {{
+        transform: translateY(-2px) !important;
+        box-shadow: 0 4px 12px rgba(0,0,0,0.12) !important;
+    }}
+    
+    /* Resultados */
+    .result-success {{
+        background-color: #eafaf1;
+        border-left: 4px solid {COLORS['success']};
+        padding: 12px 16px;
+        border-radius: 4px;
+        margin: 4px 0;
+        font-size: 14px;
+    }}
+    
+    .result-error {{
+        background-color: #fdedec;
+        border-left: 4px solid {COLORS['urgent']};
+        padding: 12px 16px;
+        border-radius: 4px;
+        margin: 4px 0;
+        font-size: 14px;
+    }}
+    
+    .result-info {{
+        background-color: #eaf2fa;
+        border-left: 4px solid {COLORS['info']};
+        padding: 12px 16px;
+        border-radius: 4px;
+        margin: 4px 0;
+        font-size: 14px;
+    }}
+    
     /* Sidebar */
     .css-1d391kg {{
         background-color: #ffffff !important;
@@ -622,7 +679,7 @@ st.markdown(f"""
     .upload-container {{
         border: 2px dashed {COLORS['border']};
         border-radius: 12px;
-        padding: 30px;
+        padding: 40px;
         text-align: center;
         background-color: #fafbfc;
         transition: all 0.3s ease;
@@ -633,35 +690,10 @@ st.markdown(f"""
         background-color: #f5f8fc;
     }}
     
-    /* Resultados */
-    .result-success {{
-        background-color: #eafaf1;
-        border-left: 4px solid {COLORS['success']};
-        padding: 12px 16px;
-        border-radius: 4px;
-        margin: 4px 0;
-    }}
-    
-    .result-error {{
-        background-color: #fdedec;
-        border-left: 4px solid {COLORS['urgent']};
-        padding: 12px 16px;
-        border-radius: 4px;
-        margin: 4px 0;
-    }}
-    
-    .result-info {{
-        background-color: #eaf2fa;
-        border-left: 4px solid {COLORS['info']};
-        padding: 12px 16px;
-        border-radius: 4px;
-        margin: 4px 0;
-    }}
-    
     /* Footer */
     .footer {{
         text-align: center;
-        padding: 20px;
+        padding: 16px;
         color: {COLORS['text_light']};
         font-size: 12px;
         border-top: 1px solid #e8edf2;
@@ -671,53 +703,44 @@ st.markdown(f"""
 """, unsafe_allow_html=True)
 
 # ============================================================
-# ENCABEZADO CON LOGO
-# ============================================================
-
-logo_base64 = get_logo_from_github(URL_LOGO_GITHUB)
-
-if logo_base64:
-    logo_html = f'<img src="{logo_base64}" alt="Community Law Group" class="header-logo">'
-else:
-    logo_html = '<div style="font-size: 36px; font-weight: 700; color: white; background: rgba(255,255,255,0.1); padding: 8px 16px; border-radius: 10px;">CLG</div>'
-
-st.markdown(f"""
-<div class="header-container">
-    {logo_html}
-    <div>
-        <div class="header-title">⚖️ ST LEGAL Alert System</div>
-        <div class="header-subtitle">Deadline and Case Management System — Cloud Version</div>
-    </div>
-    <div style="margin-left: auto; display: flex; gap: 8px;">
-        <span class="badge-primary">v1.0</span>
-        <span class="badge-success">Active</span>
-    </div>
-</div>
-""", unsafe_allow_html=True)
-
-# ============================================================
-# SIDEBAR
+# SIDEBAR - MINIMALISTA
 # ============================================================
 
 with st.sidebar:
-    st.markdown("### 📧 Configuración SMTP")
-    st.markdown("Ingresa tus credenciales de Outlook")
-    
-    smtp_username = st.text_input("Correo de Outlook", value="", placeholder="tu@email.com")
-    smtp_password = st.text_input("Contraseña", type="password", placeholder="Contraseña de Outlook")
-    
-    st.markdown("---")
-    st.markdown("### 📁 Archivo de Datos")
-    uploaded_file = st.file_uploader("Carga el archivo Excel", type=['xlsx', 'xls'])
+    st.markdown(f"""
+    <div style="text-align: center; padding: 8px 0 16px 0;">
+        <div style="font-weight: 700; color: {COLORS['primary']}; font-size: 18px;">⚖️ ST LEGAL</div>
+        <div style="font-size: 11px; color: {COLORS['text_light']}; letter-spacing: 0.5px;">ALERT SYSTEM</div>
+    </div>
+    """, unsafe_allow_html=True)
     
     st.markdown("---")
-    st.markdown("### ⚙️ Configuración")
-    fecha_referencia = st.date_input("Fecha de referencia", value=datetime.now().date())
     
-    test_mode = st.checkbox("Modo prueba (enviar a un solo correo)")
-    test_email = st.text_input("Correo de prueba") if test_mode else None
+    st.markdown("### 📧 Correo")
+    smtp_username = st.text_input("Usuario", value="", placeholder="tu@email.com", label_visibility="collapsed")
+    st.caption("Correo de Outlook")
+    
+    smtp_password = st.text_input("Contraseña", type="password", placeholder="••••••••", label_visibility="collapsed")
+    st.caption("Contraseña de Outlook")
     
     st.markdown("---")
+    
+    st.markdown("### 📁 Datos")
+    uploaded_file = st.file_uploader("Archivo Excel", type=['xlsx', 'xls'], label_visibility="collapsed")
+    st.caption("Carga tu archivo de casos")
+    
+    st.markdown("---")
+    
+    st.markdown("### ⚙️ Fecha")
+    fecha_referencia = st.date_input("Referencia", value=datetime.now().date(), label_visibility="collapsed")
+    
+    st.markdown("---")
+    
+    test_mode = st.checkbox("Modo prueba", help="Envía a un solo correo de prueba")
+    test_email = st.text_input("Correo de prueba", placeholder="test@email.com") if test_mode else None
+    
+    st.markdown("---")
+    
     col_btn1, col_btn2 = st.columns(2)
     with col_btn1:
         enviar_reales = st.button("📨 Enviar", type="primary", use_container_width=True)
@@ -725,167 +748,112 @@ with st.sidebar:
         simular = st.button("📄 Simular", use_container_width=True)
     
     st.markdown("---")
-    st.caption("🔒 Las credenciales no se guardan. Conexión TLS segura.")
+    st.caption("🔒 TLS seguro · Sin almacenamiento")
 
 # ============================================================
 # ÁREA PRINCIPAL
 # ============================================================
 
-col_main, col_info = st.columns([3, 1])
-
-with col_main:
-    if uploaded_file is not None:
-        # Mostrar info del archivo
+if uploaded_file is not None:
+    # Leer datos
+    df = pd.read_excel(uploaded_file)
+    
+    # Métricas en una fila
+    col_m1, col_m2, col_m3, col_m4 = st.columns(4)
+    
+    with col_m1:
         st.markdown(f"""
-        <div class="card">
-            <div style="display: flex; justify-content: space-between; align-items: center;">
-                <div>
-                    <span style="font-weight: 600;">📂 Archivo cargado</span>
-                    <span style="margin-left: 12px; color: #4a6a8a;">{uploaded_file.name}</span>
-                </div>
-                <span class="badge-success">✅ {uploaded_file.size // 1024} KB</span>
-            </div>
+        <div class="metric-container">
+            <div class="metric-value">{len(df)}</div>
+            <div class="metric-label">Registros</div>
         </div>
         """, unsafe_allow_html=True)
-        
-        # Leer datos
-        df = pd.read_excel(uploaded_file)
-        
-        # Métricas rápidas
-        st.markdown("### 📊 Resumen de datos")
-        
-        col_met1, col_met2, col_met3, col_met4 = st.columns(4)
-        with col_met1:
+    
+    if 'TeamOwner' in df.columns:
+        teams = df['TeamOwner'].dropna().unique()
+        with col_m2:
             st.markdown(f"""
             <div class="metric-container">
-                <div class="metric-value">{len(df)}</div>
-                <div class="metric-label">Registros</div>
+                <div class="metric-value">{len(teams)}</div>
+                <div class="metric-label">Equipos</div>
             </div>
             """, unsafe_allow_html=True)
-        
-        if 'TeamOwner' in df.columns:
-            teams = df['TeamOwner'].dropna().unique()
-            with col_met2:
-                st.markdown(f"""
-                <div class="metric-container">
-                    <div class="metric-value">{len(teams)}</div>
-                    <div class="metric-label">Equipos</div>
-                </div>
-                """, unsafe_allow_html=True)
-        
-        if 'Case Status' in df.columns:
-            rfe_count = df['Case Status'].astype(str).str.upper().str.contains('RFE', na=False).sum()
-            with col_met3:
-                st.markdown(f"""
-                <div class="metric-container">
-                    <div class="metric-value">{rfe_count}</div>
-                    <div class="metric-label">RFE Cases</div>
-                </div>
-                """, unsafe_allow_html=True)
-        
-        if 'Desktime' in df.columns:
-            on_time = len(df[df['Desktime'] == 'On time'])
-            with col_met4:
-                st.markdown(f"""
-                <div class="metric-container">
-                    <div class="metric-value">{on_time}</div>
-                    <div class="metric-label">On Time</div>
-                </div>
-                """, unsafe_allow_html=True)
-        
-        # Vista previa
-        with st.expander("👁️ Vista previa de datos"):
-            st.dataframe(df.head(10), use_container_width=True)
-        
-        # Procesar
-        if enviar_reales or simular:
-            if enviar_reales and (not smtp_username or not smtp_password):
-                st.error("❌ Por favor ingresa tus credenciales de Outlook para enviar correos reales")
-            else:
-                with st.spinner("⏳ Procesando alertas..."):
-                    resultados, errores = procesar_alertas(
-                        df, fecha_referencia, smtp_username, smtp_password,
-                        test_email, enviar_reales
-                    )
-                
-                st.markdown("---")
-                st.markdown("### 📋 Resultados")
-                
-                if errores:
-                    for err in errores:
-                        st.markdown(f'<div class="result-error">{err}</div>', unsafe_allow_html=True)
-                
-                if resultados:
-                    for res in resultados:
-                        if res.startswith("✅"):
-                            st.markdown(f'<div class="result-success">{res}</div>', unsafe_allow_html=True)
-                        elif res.startswith("❌"):
-                            st.markdown(f'<div class="result-error">{res}</div>', unsafe_allow_html=True)
-                        else:
-                            st.markdown(f'<div class="result-info">{res}</div>', unsafe_allow_html=True)
-                
-                if enviar_reales:
-                    st.balloons()
-                    st.success("🎉 Proceso completado exitosamente")
-    else:
-        # Estado inicial
-        st.markdown("""
-        <div class="card" style="text-align: center; padding: 60px 30px;">
-            <div style="font-size: 64px; margin-bottom: 16px;">📂</div>
-            <h3 style="color: #1a3a5c;">Carga tu archivo Excel</h3>
-            <p style="color: #4a6a8a; max-width: 400px; margin: 0 auto;">
-                Sube un archivo con los casos para generar alertas de vencimiento de plazos.
-                Los correos se enviarán automáticamente a los equipos correspondientes.
-            </p>
-            <div style="margin-top: 20px; display: flex; gap: 12px; justify-content: center;">
-                <span class="badge-primary">TeamOwner</span>
-                <span class="badge-primary">Deadline</span>
-                <span class="badge-primary">Case Status</span>
+    
+    if 'Case Status' in df.columns:
+        rfe_count = df['Case Status'].astype(str).str.upper().str.contains('RFE', na=False).sum()
+        with col_m3:
+            st.markdown(f"""
+            <div class="metric-container">
+                <div class="metric-value">{rfe_count}</div>
+                <div class="metric-label">RFE</div>
             </div>
-        </div>
-        """, unsafe_allow_html=True)
+            """, unsafe_allow_html=True)
+    
+    if 'Desktime' in df.columns:
+        on_time = len(df[df['Desktime'] == 'On time'])
+        with col_m4:
+            st.markdown(f"""
+            <div class="metric-container">
+                <div class="metric-value">{on_time}</div>
+                <div class="metric-label">On Time</div>
+            </div>
+            """, unsafe_allow_html=True)
+    
+    # Vista previa (expandible)
+    with st.expander("👁️ Vista previa de datos"):
+        st.dataframe(df.head(10), use_container_width=True)
+    
+    # Procesar
+    if enviar_reales or simular:
+        if enviar_reales and (not smtp_username or not smtp_password):
+            st.error("⚠️ Ingresa tus credenciales de Outlook para enviar correos reales")
+        else:
+            with st.spinner("⏳ Procesando alertas..."):
+                resultados, errores = procesar_alertas(
+                    df, fecha_referencia, smtp_username, smtp_password,
+                    test_email, enviar_reales
+                )
+            
+            st.markdown("---")
+            st.markdown("### 📋 Resultados")
+            
+            if errores:
+                for err in errores:
+                    st.markdown(f'<div class="result-error">{err}</div>', unsafe_allow_html=True)
+            
+            if resultados:
+                for res in resultados:
+                    if res.startswith("✅"):
+                        st.markdown(f'<div class="result-success">{res}</div>', unsafe_allow_html=True)
+                    elif res.startswith("❌"):
+                        st.markdown(f'<div class="result-error">{res}</div>', unsafe_allow_html=True)
+                    else:
+                        st.markdown(f'<div class="result-info">{res}</div>', unsafe_allow_html=True)
+            
+            if enviar_reales and not errores:
+                st.balloons()
+                st.success("🎉 Proceso completado exitosamente")
 
-with col_info:
+else:
+    # Estado inicial - Minimalista
     st.markdown("""
-    <div class="card">
-        <div class="card-title">📋 Instrucciones</div>
-        <ol style="margin: 0; padding-left: 18px; color: #2a3a4a; font-size: 14px; line-height: 1.8;">
-            <li>Configura tu <strong>correo</strong></li>
-            <li>Carga el archivo <strong>Excel</strong></li>
-            <li>Selecciona la <strong>fecha</strong></li>
-            <li>Simula o <strong>envía</strong></li>
-        </ol>
-    </div>
-    
-    <div class="card">
-        <div class="card-title">📌 Columnas requeridas</div>
-        <ul style="margin: 0; padding-left: 18px; color: #2a3a4a; font-size: 13px; line-height: 1.8;">
-            <li><code>TeamOwner</code></li>
-            <li><code>Deadline</code></li>
-            <li><code>Case #</code></li>
-            <li><code>Case Type</code></li>
-            <li><code>Case Status</code></li>
-            <li><code>Office Name</code></li>
-        </ul>
-    </div>
-    
-    <div class="card">
-        <div class="card-title">🔄 Colores de alerta</div>
-        <div style="display: flex; flex-direction: column; gap: 6px;">
-            <div><span class="badge-urgent">🔴</span> Overdue (crítico)</div>
-            <div><span class="badge-warning">🟡</span> 3-5 días</div>
-            <div><span class="badge-primary">🔵</span> 6+ días</div>
-            <div><span class="badge-success">🟢</span> En tiempo</div>
+    <div style="
+        text-align: center;
+        padding: 80px 30px;
+        background-color: #ffffff;
+        border-radius: 12px;
+        border: 1px solid #e8edf2;
+    ">
+        <div style="font-size: 64px; margin-bottom: 20px;">📂</div>
+        <h2 style="color: #1a3a5c; font-weight: 600; margin: 0;">Carga tu archivo Excel</h2>
+        <p style="color: #4a6a8a; margin: 8px 0 0 0;">
+            Sube un archivo con los casos para generar alertas de vencimiento
+        </p>
+        <div style="margin-top: 16px; display: flex; gap: 10px; justify-content: center; flex-wrap: wrap;">
+            <span style="background: #f0f4f8; padding: 4px 16px; border-radius: 20px; font-size: 12px; color: #4a6a8a;">TeamOwner</span>
+            <span style="background: #f0f4f8; padding: 4px 16px; border-radius: 20px; font-size: 12px; color: #4a6a8a;">Deadline</span>
+            <span style="background: #f0f4f8; padding: 4px 16px; border-radius: 20px; font-size: 12px; color: #4a6a8a;">Case Status</span>
         </div>
-    </div>
-    
-    <div class="card">
-        <div class="card-title">🔒 Seguridad</div>
-        <ul style="margin: 0; padding-left: 18px; color: #2a3a4a; font-size: 12px; line-height: 1.8;">
-            <li>🔐 TLS en conexión SMTP</li>
-            <li>🔑 Sin almacenamiento</li>
-            <li>🛡️ Solo sesión</li>
-        </ul>
     </div>
     """, unsafe_allow_html=True)
 
@@ -895,8 +863,8 @@ with col_info:
 
 st.markdown(f"""
 <div class="footer">
-    ST LEGAL Alert System — Versión Cloud · Desarrollado por Data &amp; Efficiency Team
+    ST LEGAL Alert System · Data &amp; Efficiency Team
     <br>
-    © {datetime.now().year} Community Law Group · All rights reserved
+    © {datetime.now().year} Community Law Group
 </div>
 """, unsafe_allow_html=True)
