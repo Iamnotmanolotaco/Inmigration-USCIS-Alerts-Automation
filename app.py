@@ -1,4 +1,3 @@
-
 import streamlit as st
 import pandas as pd
 import smtplib
@@ -11,6 +10,7 @@ from datetime import datetime, timedelta
 import os
 import json
 import re
+import requests  # Necesario para descargar la imagen desde GitHub
 
 # ============================================================
 # CONFIGURACIÓN
@@ -19,11 +19,31 @@ import re
 # Configuración SMTP de Outlook
 SMTP_SERVER = "smtp.office365.com"
 SMTP_PORT = 587
-# Las credenciales se piden al usuario en la interfaz
+
+# URL del logo en GitHub (¡CAMBIA ESTA URL POR LA TUYA!)
+URL_LOGO_GITHUB = "https://raw.githubusercontent.com/Iamnotmanolotaco/Inmigration-USCIS-Alerts-Automation/main/image.png"
 
 DAYS_BEFORE = 7
 DAYS_AFTER = 30
-LOGO_FILENAME = "logo.png"
+
+# ============================================================
+# FUNCIÓN PARA OBTENER LOGO DESDE GITHUB
+# ============================================================
+
+def get_logo_from_github(url):
+    """
+    Descarga la imagen desde una URL de GitHub y la convierte a Base64.
+    """
+    try:
+        response = requests.get(url, timeout=10)
+        if response.status_code == 200:
+            base64_string = base64.b64encode(response.content).decode('utf-8')
+            return f"data:image/png;base64,{base64_string}"
+        else:
+            st.error(f"No se pudo descargar el logo (código {response.status_code})")
+    except Exception as e:
+        st.error(f"Error al descargar el logo: {e}")
+    return None
 
 # ============================================================
 # FUNCIONES DE UTILIDAD
@@ -84,16 +104,6 @@ def get_cc_for_team(team_name):
     }
     default_cc = ["default_supervisor@communitylawgroup.com"]
     return cc_by_team.get(team_name.strip(), default_cc)
-
-def get_logo_base64(logo_bytes):
-    """Convierte imagen subida a Base64"""
-    try:
-        if logo_bytes:
-            base64_string = base64.b64encode(logo_bytes).decode('utf-8')
-            return f"data:image/png;base64,{base64_string}"
-    except:
-        pass
-    return None
 
 # ============================================================
 # FUNCIÓN PARA GENERAR HTML DEL CORREO
@@ -342,18 +352,15 @@ def enviar_correo_smtp(smtp_server, smtp_port, username, password, to_emails, cc
         msg['To'] = ", ".join(to_emails)
         if cc_emails:
             msg['CC'] = ", ".join(cc_emails)
-        msg['X-Priority'] = '1'  # Alta prioridad
+        msg['X-Priority'] = '1'
         
-        # Adjuntar HTML
         msg.attach(MIMEText(html_body, 'html'))
         
-        # Conectar y enviar
         context = ssl.create_default_context()
         with smtplib.SMTP(smtp_server, smtp_port) as server:
             server.starttls(context=context)
             server.login(username, password)
             
-            # Lista de destinatarios (TO + CC)
             all_recipients = to_emails + (cc_emails if cc_emails else [])
             server.sendmail(username, all_recipients, msg.as_string())
         
@@ -382,7 +389,6 @@ def procesar_alertas(df, fecha_referencia, smtp_username, smtp_password,
     # Filtrar por fechas
     df_temp = df.copy()
     
-    # Calcular días hasta deadline
     if 'Deadline' not in df_temp.columns:
         return [], ["❌ Error: La columna 'Deadline' no existe en el archivo"]
     
@@ -390,7 +396,6 @@ def procesar_alertas(df, fecha_referencia, smtp_username, smtp_password,
         lambda x: calcular_dias_hasta_deadline(x, fecha_referencia)
     )
     
-    # Filtrar casos que requieren alerta
     mask_upcoming = (df_temp['Days_Until'] >= 0) & (df_temp['Days_Until'] <= DAYS_BEFORE)
     mask_overdue = (df_temp['Days_Until'] < 0) & (df_temp['Days_Until'] >= -DAYS_AFTER)
     df_alerts = df_temp[mask_upcoming | mask_overdue].copy()
@@ -408,11 +413,10 @@ def procesar_alertas(df, fecha_referencia, smtp_username, smtp_password,
     if not alerts_by_team:
         return [], ["⚠️ No se encontraron equipos con alertas"]
     
-    # Logo para el correo
-    logo_base64 = None
-    if os.path.exists(LOGO_FILENAME):
-        with open(LOGO_FILENAME, 'rb') as f:
-            logo_base64 = get_logo_base64(f.read())
+    # ============================================================
+    # Cargar logo desde GitHub (REEMPLAZA LA CARGA LOCAL)
+    # ============================================================
+    logo_base64 = get_logo_from_github(URL_LOGO_GITHUB)
     
     # Procesar cada equipo
     for team_name, team_cases in alerts_by_team.items():
@@ -422,7 +426,6 @@ def procesar_alertas(df, fecha_referencia, smtp_username, smtp_password,
             resultados.append(f"⏭️ {team_name}: Todos los casos son RFE - omitido")
             continue
         
-        # Determinar destinatarios
         if test_email:
             to_email = [test_email]
             cc_email = []
@@ -449,7 +452,7 @@ def procesar_alertas(df, fecha_referencia, smtp_username, smtp_password,
                 errores.append(f"❌ {team_name}: {msg}")
         else:
             resultados.append(f"📄 {team_name}: Correo listo (modo simulación)")
-            # Guardar preview para depuración
+            # Guardar preview
             with open(f"preview_{team_name}.html", 'w', encoding='utf-8') as f:
                 f.write(html_body)
             resultados.append(f"   📄 Preview guardado: preview_{team_name}.html")
@@ -495,15 +498,12 @@ with col1:
     if uploaded_file is not None:
         st.success(f"✅ Archivo cargado: {uploaded_file.name}")
         
-        # Leer archivo
         df = pd.read_excel(uploaded_file)
         st.info(f"📊 Registros cargados: {len(df)}")
         
-        # Mostrar vista previa
         with st.expander("👁️ Vista previa de datos"):
             st.dataframe(df.head(10))
         
-        # Procesar cuando se haga clic en un botón
         if enviar_reales or simular:
             if enviar_reales and (not smtp_username or not smtp_password):
                 st.error("❌ Por favor ingresa tus credenciales de Outlook para enviar correos reales")
@@ -514,7 +514,6 @@ with col1:
                         test_email, enviar_reales
                     )
                 
-                # Mostrar resultados
                 st.markdown("---")
                 st.subheader("📋 Resultados")
                 
