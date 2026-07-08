@@ -21,7 +21,7 @@ SMTP_SERVER = "smtp.office365.com"
 SMTP_PORT = 587
 
 # URL del logo en GitHub (¡CAMBIA ESTA URL POR LA TUYA!)
-URL_LOGO_GITHUB = "https://raw.githubusercontent.com/Iamnotmanolotaco/Inmigration-USCIS-Alerts-Automation/main/logo.png"
+URL_LOGO_GITHUB = "https://raw.githubusercontent.com/Iamnotmanolotaco/Inmigration-USCIS-Alerts-Automation/main/image.png"
 
 DAYS_BEFORE = 7
 DAYS_AFTER = 30
