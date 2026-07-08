@@ -1,5 +1,5 @@
 # st_legal_alert_system.py
-# Versión con banner profesional y diseño minimalista
+# Versión con modo oscuro y paleta de colores mejorada
 
 import streamlit as st
 import pandas as pd
@@ -19,11 +19,9 @@ import requests
 # CONFIGURACIÓN
 # ============================================================
 
-# Configuración SMTP de Outlook
 SMTP_SERVER = "smtp.office365.com"
 SMTP_PORT = 587
 
-# URLs de GitHub
 URL_LOGO_GITHUB = "https://raw.githubusercontent.com/Iamnotmanolotaco/Inmigration-USCIS-Alerts-Automation/main/logo.png"
 URL_BANNER_GITHUB = "https://raw.githubusercontent.com/Iamnotmanolotaco/Inmigration-USCIS-Alerts-Automation/main/banner.png"
 
@@ -31,32 +29,10 @@ DAYS_BEFORE = 7
 DAYS_AFTER = 30
 
 # ============================================================
-# COLORES CORPORATIVOS
-# ============================================================
-
-COLORS = {
-    "primary": "#1a3a5c",
-    "secondary": "#4a7c9c",
-    "light_bg": "#f0f4f8",
-    "card_bg": "#ffffff",
-    "border": "#d0d8e4",
-    "text": "#1a2a3a",
-    "text_light": "#4a6a8a",
-    "urgent": "#c0392b",
-    "warning": "#e67e22",
-    "info": "#1e40af",
-    "success": "#27ae60",
-}
-
-# ============================================================
 # FUNCIONES PARA OBTENER RECURSOS DESDE GITHUB
 # ============================================================
 
 def get_image_from_github(url):
-    """
-    Descarga una imagen desde GitHub y la convierte a Base64.
-    Retorna None si falla.
-    """
     try:
         response = requests.get(url, timeout=10)
         if response.status_code == 200:
@@ -69,11 +45,9 @@ def get_image_from_github(url):
         return None
 
 def get_logo_base64():
-    """Obtiene el logo en Base64"""
     return get_image_from_github(URL_LOGO_GITHUB)
 
 def get_banner_base64():
-    """Obtiene el banner en Base64"""
     return get_image_from_github(URL_BANNER_GITHUB)
 
 # ============================================================
@@ -132,8 +106,6 @@ def get_cc_for_team(team_name):
 # ============================================================
 
 def generar_html_correo(team_cases, team_name, fecha_referencia, logo_base64=None):
-    """Genera el HTML del correo con los casos"""
-    
     is_rfe = pd.Series([False] * len(team_cases), index=team_cases.index)
     if 'Case Status' in team_cases.columns:
         for idx, status in team_cases['Case Status'].items():
@@ -141,7 +113,6 @@ def generar_html_correo(team_cases, team_name, fecha_referencia, logo_base64=Non
                 is_rfe.iloc[idx] = True
     
     team_cases_filtered = team_cases[~is_rfe].copy()
-    
     if len(team_cases_filtered) == 0:
         return None
     
@@ -362,7 +333,6 @@ def generar_html_correo(team_cases, team_name, fecha_referencia, logo_base64=Non
 
 def enviar_correo_smtp(smtp_server, smtp_port, username, password, to_emails, cc_emails,
                        subject, html_body, sender_name="Legal Support Team"):
-    """Envía correo usando SMTP de Outlook"""
     try:
         msg = MIMEMultipart('alternative')
         msg['Subject'] = subject
@@ -378,7 +348,6 @@ def enviar_correo_smtp(smtp_server, smtp_port, username, password, to_emails, cc
         with smtplib.SMTP(smtp_server, smtp_port) as server:
             server.starttls(context=context)
             server.login(username, password)
-            
             all_recipients = to_emails + (cc_emails if cc_emails else [])
             server.sendmail(username, all_recipients, msg.as_string())
         
@@ -392,8 +361,6 @@ def enviar_correo_smtp(smtp_server, smtp_port, username, password, to_emails, cc
 
 def procesar_alertas(df, fecha_referencia, smtp_username, smtp_password, 
                      test_email=None, enviar_reales=False):
-    """Procesa las alertas y envía correos"""
-    
     resultados = []
     errores = []
     
@@ -404,7 +371,6 @@ def procesar_alertas(df, fecha_referencia, smtp_username, smtp_password,
     df['TeamOwner'] = df['TeamOwner'].replace({'KIa': 'Kia', 'kia': 'Kia', 'KIA': 'Kia'})
     
     df_temp = df.copy()
-    
     if 'Deadline' not in df_temp.columns:
         return [], ["❌ Error: La columna 'Deadline' no existe en el archivo"]
     
@@ -432,7 +398,6 @@ def procesar_alertas(df, fecha_referencia, smtp_username, smtp_password,
     
     for team_name, team_cases in alerts_by_team.items():
         html_body = generar_html_correo(team_cases, team_name, fecha_referencia, logo_base64)
-        
         if html_body is None:
             resultados.append(f"⏭️ {team_name}: Todos los casos son RFE - omitido")
             continue
@@ -470,7 +435,7 @@ def procesar_alertas(df, fecha_referencia, smtp_username, smtp_password,
     return resultados, errores
 
 # ============================================================
-# INTERFAZ STREAMLIT - PROFESIONAL Y MINIMALISTA
+# INTERFAZ STREAMLIT - CON MODO OSCURO Y PALETA MEJORADA
 # ============================================================
 
 st.set_page_config(
@@ -481,38 +446,302 @@ st.set_page_config(
 )
 
 # ============================================================
-# BANNER PROFESIONAL (con o sin imagen)
+# PALETA DE COLORES (MODO CLARO / OSCURO)
+# ============================================================
+
+def get_colors(dark_mode=False):
+    if dark_mode:
+        return {
+            "bg": "#0e1117",
+            "card_bg": "#1c1c1e",
+            "card_border": "#2c2c2e",
+            "text_primary": "#e8edf2",
+            "text_secondary": "#9aa4b8",
+            "primary": "#4a7c9c",
+            "primary_dark": "#1a3a5c",
+            "secondary": "#6a9fc7",
+            "accent": "#e67e22",
+            "urgent": "#e74c3c",
+            "success": "#2ecc71",
+            "info": "#3498db",
+            "warning": "#f39c12",
+            "header_bg": "#1a1a1e",
+            "banner_grad1": "#1a3a5c",
+            "banner_grad2": "#4a7c9c",
+            "metric_bg": "#252528",
+            "shadow": "rgba(0,0,0,0.4)"
+        }
+    else:
+        return {
+            "bg": "#f0f4f8",
+            "card_bg": "#ffffff",
+            "card_border": "#e8edf2",
+            "text_primary": "#1a2a3a",
+            "text_secondary": "#4a6a8a",
+            "primary": "#1a3a5c",
+            "primary_dark": "#0d1f33",
+            "secondary": "#4a7c9c",
+            "accent": "#e67e22",
+            "urgent": "#c0392b",
+            "success": "#27ae60",
+            "info": "#1e40af",
+            "warning": "#e67e22",
+            "header_bg": "#ffffff",
+            "banner_grad1": "#1a3a5c",
+            "banner_grad2": "#4a7c9c",
+            "metric_bg": "#f0f4f8",
+            "shadow": "rgba(0,0,0,0.08)"
+        }
+
+# ============================================================
+# INICIALIZAR ESTADO DEL MODO OSCURO
+# ============================================================
+
+if 'dark_mode' not in st.session_state:
+    st.session_state.dark_mode = False
+
+# ============================================================
+# BANNER
 # ============================================================
 
 banner_base64 = get_banner_base64()
+colors = get_colors(st.session_state.dark_mode)
+
+# ============================================================
+# CSS DINÁMICO (se adapta al modo oscuro/claro)
+# ============================================================
+
+st.markdown(f"""
+<style>
+    /* Ocultar elementos */
+    #MainMenu {{ visibility: hidden; }}
+    footer {{ visibility: hidden; }}
+    
+    /* Fondo general */
+    .stApp {{
+        background-color: {colors['bg']};
+    }}
+    
+    /* Tarjetas */
+    .card {{
+        background-color: {colors['card_bg']};
+        border-radius: 12px;
+        padding: 20px 24px;
+        box-shadow: 0 2px 8px {colors['shadow']};
+        border: 1px solid {colors['card_border']};
+        margin-bottom: 16px;
+    }}
+    
+    .card-title {{
+        color: {colors['text_primary']};
+        font-size: 16px;
+        font-weight: 600;
+        margin-bottom: 8px;
+    }}
+    
+    /* Métricas */
+    .metric-container {{
+        background-color: {colors['metric_bg']};
+        border-radius: 10px;
+        padding: 16px 20px;
+        text-align: center;
+        border: 1px solid {colors['card_border']};
+    }}
+    
+    .metric-value {{
+        font-size: 28px;
+        font-weight: 700;
+        color: {colors['primary']};
+    }}
+    
+    .metric-label {{
+        font-size: 12px;
+        color: {colors['text_secondary']};
+        text-transform: uppercase;
+        letter-spacing: 0.5px;
+        font-weight: 600;
+    }}
+    
+    /* Textos */
+    .text-primary {{ color: {colors['text_primary']}; }}
+    .text-secondary {{ color: {colors['text_secondary']}; }}
+    
+    /* Badges */
+    .badge-active {{
+        background-color: rgba(46, 204, 113, 0.15);
+        color: {colors['success']};
+        padding: 4px 14px;
+        border-radius: 20px;
+        font-size: 12px;
+        font-weight: 600;
+        border: 1px solid rgba(46, 204, 113, 0.2);
+    }}
+    
+    .badge-urgent {{
+        background-color: rgba(192, 57, 43, 0.12);
+        color: {colors['urgent']};
+        padding: 4px 14px;
+        border-radius: 20px;
+        font-size: 12px;
+        font-weight: 600;
+    }}
+    
+    .badge-warning {{
+        background-color: rgba(230, 126, 34, 0.12);
+        color: {colors['warning']};
+        padding: 4px 14px;
+        border-radius: 20px;
+        font-size: 12px;
+        font-weight: 600;
+    }}
+    
+    .badge-info {{
+        background-color: rgba(52, 152, 219, 0.12);
+        color: {colors['info']};
+        padding: 4px 14px;
+        border-radius: 20px;
+        font-size: 12px;
+        font-weight: 600;
+    }}
+    
+    /* Botones */
+    .stButton > button {{
+        border-radius: 8px !important;
+        font-weight: 600 !important;
+        transition: all 0.3s ease !important;
+        border: none !important;
+    }}
+    
+    .stButton > button:hover {{
+        transform: translateY(-2px) !important;
+        box-shadow: 0 4px 12px rgba(0,0,0,0.15) !important;
+    }}
+    
+    /* Resultados */
+    .result-success {{
+        background-color: rgba(46, 204, 113, 0.10);
+        border-left: 4px solid {colors['success']};
+        padding: 12px 16px;
+        border-radius: 4px;
+        margin: 4px 0;
+        color: {colors['text_primary']};
+    }}
+    
+    .result-error {{
+        background-color: rgba(231, 76, 60, 0.10);
+        border-left: 4px solid {colors['urgent']};
+        padding: 12px 16px;
+        border-radius: 4px;
+        margin: 4px 0;
+        color: {colors['text_primary']};
+    }}
+    
+    .result-info {{
+        background-color: rgba(52, 152, 219, 0.10);
+        border-left: 4px solid {colors['info']};
+        padding: 12px 16px;
+        border-radius: 4px;
+        margin: 4px 0;
+        color: {colors['text_primary']};
+    }}
+    
+    /* Sidebar */
+    .css-1d391kg {{
+        background-color: {colors['card_bg']} !important;
+        border-right: 1px solid {colors['card_border']} !important;
+    }}
+    
+    /* Upload */
+    .upload-container {{
+        border: 2px dashed {colors['card_border']};
+        border-radius: 12px;
+        padding: 40px;
+        text-align: center;
+        background-color: {colors['bg']};
+        transition: all 0.3s ease;
+    }}
+    
+    .upload-container:hover {{
+        border-color: {colors['secondary']};
+        background-color: {colors['metric_bg']};
+    }}
+    
+    /* Footer */
+    .footer {{
+        text-align: center;
+        padding: 16px;
+        color: {colors['text_secondary']};
+        font-size: 12px;
+        border-top: 1px solid {colors['card_border']};
+        margin-top: 30px;
+    }}
+    
+    /* Headers */
+    h1, h2, h3, h4 {{
+        color: {colors['text_primary']} !important;
+    }}
+    
+    /* Labels y texto de Streamlit */
+    .stMarkdown, .stText, .stCaption, label {{
+        color: {colors['text_secondary']} !important;
+    }}
+    
+    /* Inputs */
+    .stTextInput > div > div > input {{
+        background-color: {colors['bg']} !important;
+        color: {colors['text_primary']} !important;
+        border-color: {colors['card_border']} !important;
+    }}
+    
+    .stDateInput > div > div > input {{
+        background-color: {colors['bg']} !important;
+        color: {colors['text_primary']} !important;
+        border-color: {colors['card_border']} !important;
+    }}
+    
+    /* Checkbox */
+    .stCheckbox label {{
+        color: {colors['text_secondary']} !important;
+    }}
+    
+    /* File uploader */
+    .stFileUploader > div > button {{
+        background-color: {colors['bg']} !important;
+        color: {colors['text_primary']} !important;
+        border-color: {colors['card_border']} !important;
+    }}
+</style>
+""", unsafe_allow_html=True)
+
+# ============================================================
+# BANNER CON IMAGEN O RESPALDO
+# ============================================================
 
 if banner_base64:
-    # Mostrar banner con imagen
     st.markdown(f"""
-    <div style="width: 100%; margin-bottom: 20px; border-radius: 12px; overflow: hidden; box-shadow: 0 4px 15px rgba(0,0,0,0.08);">
+    <div style="width: 100%; margin-bottom: 20px; border-radius: 12px; overflow: hidden; box-shadow: 0 4px 15px {colors['shadow']};">
         <img src="{banner_base64}" alt="ST LEGAL Alert System" style="width: 100%; height: auto; display: block;">
     </div>
     """, unsafe_allow_html=True)
 else:
-    # Banner de respaldo (sin imagen)
     st.markdown(f"""
     <div style="
-        background: linear-gradient(135deg, {COLORS['primary']}, {COLORS['secondary']});
-        padding: 40px 50px;
+        background: linear-gradient(135deg, {colors['banner_grad1']}, {colors['banner_grad2']});
+        padding: 35px 45px;
         border-radius: 12px;
         margin-bottom: 25px;
-        box-shadow: 0 4px 15px rgba(26, 58, 92, 0.25);
+        box-shadow: 0 4px 15px {colors['shadow']};
     ">
         <div style="display: flex; align-items: center; justify-content: space-between; flex-wrap: wrap; gap: 15px;">
             <div>
-                <h1 style="color: white; font-size: 32px; font-weight: 700; margin: 0; letter-spacing: -0.5px;">
+                <h1 style="color: white; font-size: 30px; font-weight: 700; margin: 0; letter-spacing: -0.5px;">
                     ⚖️ ST LEGAL
                 </h1>
-                <p style="color: rgba(255,255,255,0.9); font-size: 16px; margin: 4px 0 0 0;">
+                <p style="color: rgba(255,255,255,0.9); font-size: 15px; margin: 4px 0 0 0;">
                     Deadline and Case Management System
                 </p>
             </div>
-            <div style="display: flex; gap: 12px; align-items: center;">
+            <div style="display: flex; gap: 12px; align-items: center; flex-wrap: wrap;">
                 <span style="
                     background: rgba(255,255,255,0.2);
                     color: white;
@@ -536,183 +765,26 @@ else:
     """, unsafe_allow_html=True)
 
 # ============================================================
-# CSS PERSONALIZADO
-# ============================================================
-
-st.markdown(f"""
-<style>
-    /* Ocultar elementos de Streamlit que sobran */
-    #MainMenu {{ visibility: hidden; }}
-    footer {{ visibility: hidden; }}
-    
-    /* Estilos generales */
-    .main {{
-        background-color: {COLORS['light_bg']};
-    }}
-    
-    /* Tarjetas */
-    .card {{
-        background-color: {COLORS['card_bg']};
-        border-radius: 12px;
-        padding: 20px 24px;
-        box-shadow: 0 2px 8px rgba(0,0,0,0.04);
-        border: 1px solid #e8edf2;
-        margin-bottom: 16px;
-    }}
-    
-    .card-title {{
-        color: {COLORS['primary']};
-        font-size: 16px;
-        font-weight: 600;
-        margin-bottom: 8px;
-    }}
-    
-    /* Métricas */
-    .metric-container {{
-        background-color: {COLORS['light_bg']};
-        border-radius: 10px;
-        padding: 16px 20px;
-        text-align: center;
-        border: 1px solid #e8edf2;
-    }}
-    
-    .metric-value {{
-        font-size: 28px;
-        font-weight: 700;
-        color: {COLORS['primary']};
-    }}
-    
-    .metric-label {{
-        font-size: 12px;
-        color: {COLORS['text_light']};
-        text-transform: uppercase;
-        letter-spacing: 0.5px;
-        font-weight: 600;
-    }}
-    
-    /* Badges de estado */
-    .badge-active {{
-        background-color: rgba(46, 204, 113, 0.15);
-        color: #27ae60;
-        padding: 4px 14px;
-        border-radius: 20px;
-        font-size: 12px;
-        font-weight: 600;
-        border: 1px solid rgba(46, 204, 113, 0.2);
-    }}
-    
-    .badge-urgent {{
-        background-color: rgba(192, 57, 43, 0.12);
-        color: {COLORS['urgent']};
-        padding: 4px 14px;
-        border-radius: 20px;
-        font-size: 12px;
-        font-weight: 600;
-    }}
-    
-    .badge-warning {{
-        background-color: rgba(230, 126, 34, 0.12);
-        color: {COLORS['warning']};
-        padding: 4px 14px;
-        border-radius: 20px;
-        font-size: 12px;
-        font-weight: 600;
-    }}
-    
-    .badge-info {{
-        background-color: rgba(30, 64, 175, 0.10);
-        color: {COLORS['info']};
-        padding: 4px 14px;
-        border-radius: 20px;
-        font-size: 12px;
-        font-weight: 600;
-    }}
-    
-    /* Botones */
-    .stButton > button {{
-        border-radius: 8px !important;
-        font-weight: 600 !important;
-        transition: all 0.3s ease !important;
-        border: none !important;
-    }}
-    
-    .stButton > button:hover {{
-        transform: translateY(-2px) !important;
-        box-shadow: 0 4px 12px rgba(0,0,0,0.12) !important;
-    }}
-    
-    /* Resultados */
-    .result-success {{
-        background-color: #eafaf1;
-        border-left: 4px solid {COLORS['success']};
-        padding: 12px 16px;
-        border-radius: 4px;
-        margin: 4px 0;
-        font-size: 14px;
-    }}
-    
-    .result-error {{
-        background-color: #fdedec;
-        border-left: 4px solid {COLORS['urgent']};
-        padding: 12px 16px;
-        border-radius: 4px;
-        margin: 4px 0;
-        font-size: 14px;
-    }}
-    
-    .result-info {{
-        background-color: #eaf2fa;
-        border-left: 4px solid {COLORS['info']};
-        padding: 12px 16px;
-        border-radius: 4px;
-        margin: 4px 0;
-        font-size: 14px;
-    }}
-    
-    /* Sidebar */
-    .css-1d391kg {{
-        background-color: #ffffff !important;
-        border-right: 1px solid #e8edf2 !important;
-    }}
-    
-    /* Upload */
-    .upload-container {{
-        border: 2px dashed {COLORS['border']};
-        border-radius: 12px;
-        padding: 40px;
-        text-align: center;
-        background-color: #fafbfc;
-        transition: all 0.3s ease;
-    }}
-    
-    .upload-container:hover {{
-        border-color: {COLORS['secondary']};
-        background-color: #f5f8fc;
-    }}
-    
-    /* Footer */
-    .footer {{
-        text-align: center;
-        padding: 16px;
-        color: {COLORS['text_light']};
-        font-size: 12px;
-        border-top: 1px solid #e8edf2;
-        margin-top: 30px;
-    }}
-</style>
-""", unsafe_allow_html=True)
-
-# ============================================================
-# SIDEBAR - MINIMALISTA
+# SIDEBAR - CON TOGGLE DE MODO OSCURO
 # ============================================================
 
 with st.sidebar:
     st.markdown(f"""
-    <div style="text-align: center; padding: 8px 0 16px 0;">
-        <div style="font-weight: 700; color: {COLORS['primary']}; font-size: 18px;">⚖️ ST LEGAL</div>
-        <div style="font-size: 11px; color: {COLORS['text_light']}; letter-spacing: 0.5px;">ALERT SYSTEM</div>
+    <div style="text-align: center; padding: 4px 0 12px 0;">
+        <div style="font-weight: 700; color: {colors['primary']}; font-size: 20px;">⚖️ ST LEGAL</div>
+        <div style="font-size: 11px; color: {colors['text_secondary']}; letter-spacing: 0.5px;">ALERT SYSTEM</div>
     </div>
     """, unsafe_allow_html=True)
+    
+    st.markdown("---")
+    
+    # ============================================================
+    # Toggle de modo oscuro
+    # ============================================================
+    dark_mode_toggle = st.toggle("🌙 Modo oscuro", value=st.session_state.dark_mode)
+    if dark_mode_toggle != st.session_state.dark_mode:
+        st.session_state.dark_mode = dark_mode_toggle
+        st.rerun()
     
     st.markdown("---")
     
@@ -755,10 +827,9 @@ with st.sidebar:
 # ============================================================
 
 if uploaded_file is not None:
-    # Leer datos
     df = pd.read_excel(uploaded_file)
     
-    # Métricas en una fila
+    # Métricas
     col_m1, col_m2, col_m3, col_m4 = st.columns(4)
     
     with col_m1:
@@ -799,7 +870,7 @@ if uploaded_file is not None:
             </div>
             """, unsafe_allow_html=True)
     
-    # Vista previa (expandible)
+    # Vista previa
     with st.expander("👁️ Vista previa de datos"):
         st.dataframe(df.head(10), use_container_width=True)
     
@@ -835,24 +906,23 @@ if uploaded_file is not None:
                 st.success("🎉 Proceso completado exitosamente")
 
 else:
-    # Estado inicial - Minimalista
-    st.markdown("""
+    st.markdown(f"""
     <div style="
         text-align: center;
         padding: 80px 30px;
-        background-color: #ffffff;
+        background-color: {colors['card_bg']};
         border-radius: 12px;
-        border: 1px solid #e8edf2;
+        border: 1px solid {colors['card_border']};
     ">
         <div style="font-size: 64px; margin-bottom: 20px;">📂</div>
-        <h2 style="color: #1a3a5c; font-weight: 600; margin: 0;">Carga tu archivo Excel</h2>
-        <p style="color: #4a6a8a; margin: 8px 0 0 0;">
+        <h2 style="color: {colors['text_primary']}; font-weight: 600; margin: 0;">Carga tu archivo Excel</h2>
+        <p style="color: {colors['text_secondary']}; margin: 8px 0 0 0;">
             Sube un archivo con los casos para generar alertas de vencimiento
         </p>
         <div style="margin-top: 16px; display: flex; gap: 10px; justify-content: center; flex-wrap: wrap;">
-            <span style="background: #f0f4f8; padding: 4px 16px; border-radius: 20px; font-size: 12px; color: #4a6a8a;">TeamOwner</span>
-            <span style="background: #f0f4f8; padding: 4px 16px; border-radius: 20px; font-size: 12px; color: #4a6a8a;">Deadline</span>
-            <span style="background: #f0f4f8; padding: 4px 16px; border-radius: 20px; font-size: 12px; color: #4a6a8a;">Case Status</span>
+            <span style="background: {colors['metric_bg']}; padding: 4px 16px; border-radius: 20px; font-size: 12px; color: {colors['text_secondary']};">TeamOwner</span>
+            <span style="background: {colors['metric_bg']}; padding: 4px 16px; border-radius: 20px; font-size: 12px; color: {colors['text_secondary']};">Deadline</span>
+            <span style="background: {colors['metric_bg']}; padding: 4px 16px; border-radius: 20px; font-size: 12px; color: {colors['text_secondary']};">Case Status</span>
         </div>
     </div>
     """, unsafe_allow_html=True)
