@@ -1,717 +1,560 @@
+
 import streamlit as st
 import pandas as pd
-import re
-from datetime import datetime, timedelta
-import io
-import plotly.express as px
 import smtplib
-from email.mime.text import MIMEText
+import ssl
 from email.mime.multipart import MIMEMultipart
+from email.mime.text import MIMEText
+from email.mime.image import MIMEImage
+import base64
+from datetime import datetime, timedelta
+import os
+import json
+import re
 
-# ============================================
-# CONFIGURACIÓN DE LA PÁGINA
-# ============================================
-st.set_page_config(
-    page_title="ST LEGAL AUTOMATED",
-    page_icon="⚖️",
-    layout="wide",
-    initial_sidebar_state="expanded"
-)
+# ============================================================
+# CONFIGURACIÓN
+# ============================================================
 
-# Estilos personalizados
-st.markdown("""
-<style>
-    .main-header {
-        background: linear-gradient(135deg, #1a3a5c, #2a5a8c);
-        padding: 1.5rem;
-        border-radius: 10px;
-        margin-bottom: 2rem;
-        color: white;
-        text-align: center;
-    }
-    .metric-card {
-        background-color: #f8fafc;
-        padding: 1rem;
-        border-radius: 10px;
-        border: 1px solid #e2e8f0;
-        text-align: center;
-    }
-    .urgent {
-        color: #c0392b;
-        font-weight: bold;
-    }
-    .warning {
-        color: #e67e22;
-        font-weight: bold;
-    }
-</style>
-""", unsafe_allow_html=True)
+# Configuración SMTP de Outlook
+SMTP_SERVER = "smtp.office365.com"
+SMTP_PORT = 587
+# Las credenciales se piden al usuario en la interfaz
 
-# ============================================
-# FUNCIÓN PARA ENVIAR CORREOS REALES
-# ============================================
-def enviar_correo_real(destinatario, asunto, cuerpo_html, smtp_config):
+DAYS_BEFORE = 7
+DAYS_AFTER = 30
+LOGO_FILENAME = "logo.png"
+
+# ============================================================
+# FUNCIONES DE UTILIDAD
+# ============================================================
+
+def formatear_mes(numero_mes):
+    meses = {1: 'enero', 2: 'febrero', 3: 'marzo', 4: 'abril',
+             5: 'mayo', 6: 'junio', 7: 'julio', 8: 'agosto',
+             9: 'septiembre', 10: 'octubre', 11: 'noviembre', 12: 'diciembre'}
+    return meses[numero_mes]
+
+def calcular_dias_hasta_deadline(deadline_str, fecha_referencia):
+    if pd.isna(deadline_str) or deadline_str == "":
+        return None
     try:
-        msg = MIMEMultipart()
-        msg['From'] = smtp_config['sender']
-        msg['To'] = destinatario
-        msg['Subject'] = asunto
-        msg.attach(MIMEText(cuerpo_html, 'html'))
-        
-        server = smtplib.SMTP(smtp_config['server'], smtp_config['port'])
-        server.starttls()
-        server.login(smtp_config['sender'], smtp_config['password'])
-        server.send_message(msg)
-        server.quit()
-        return True, "Correo enviado exitosamente"
-    except Exception as e:
-        return False, str(e)
+        if isinstance(deadline_str, (datetime, pd.Timestamp)):
+            deadline_date = deadline_str.date()
+        else:
+            deadline_date = pd.to_datetime(deadline_str).date()
+        return (deadline_date - fecha_referencia).days
+    except:
+        return None
 
-def generar_cuerpo_correo(team_name, team_cases, days_before):
-    today = datetime.now()
+def is_rfe_case(case_status):
+    if pd.isna(case_status):
+        return False
+    rfe_patterns = [
+        'RFE_RECEIVED', 'RFE_RESPONSE_SENT', 'RFE SENT',
+        'RFE RECEIVED', 'RFE RESPONSE SENT', 'RFE_RESPONSE',
+        'RFE PENDING', 'RFE ISSUED', 'RFE RESPONSE RECEIVED'
+    ]
+    status_str = str(case_status).strip().upper()
+    for pattern in rfe_patterns:
+        if pattern.upper().replace('_', ' ') in status_str or pattern in status_str:
+            return True
+    return False
+
+def get_days_style(days):
+    if days <= 0:
+        return "days-critical", f"{abs(days)} days overdue"
+    elif days <= 2:
+        return "days-critical", f"{days} days"
+    elif days <= 5:
+        return "days-warning", f"{days} days"
+    else:
+        return "days-info", f"{days} days"
+
+def get_team_email(team_name):
+    team_emails = {
+        "Kia": "dataprojects@communitylawgroup.com",
+        # Agregar más equipos según necesidad
+    }
+    return team_emails.get(team_name.strip(), None)
+
+def get_cc_for_team(team_name):
+    cc_by_team = {
+        # "Kia": ["cc1@email.com", "cc2@email.com"],
+    }
+    default_cc = ["default_supervisor@communitylawgroup.com"]
+    return cc_by_team.get(team_name.strip(), default_cc)
+
+def get_logo_base64(logo_bytes):
+    """Convierte imagen subida a Base64"""
+    try:
+        if logo_bytes:
+            base64_string = base64.b64encode(logo_bytes).decode('utf-8')
+            return f"data:image/png;base64,{base64_string}"
+    except:
+        pass
+    return None
+
+# ============================================================
+# FUNCIÓN PARA GENERAR HTML DEL CORREO
+# ============================================================
+
+def generar_html_correo(team_cases, team_name, fecha_referencia, logo_base64=None):
+    """Genera el HTML del correo con los casos"""
     
+    # Filtrar RFE
+    is_rfe = pd.Series([False] * len(team_cases), index=team_cases.index)
+    if 'Case Status' in team_cases.columns:
+        for idx, status in team_cases['Case Status'].items():
+            if is_rfe_case(status):
+                is_rfe.iloc[idx] = True
+    
+    team_cases_filtered = team_cases[~is_rfe].copy()
+    
+    if len(team_cases_filtered) == 0:
+        return None
+    
+    team_cases_filtered['Days_Until'] = team_cases_filtered['Deadline'].apply(
+        lambda x: calcular_dias_hasta_deadline(x, fecha_referencia)
+    )
+    
+    overdue = team_cases_filtered[team_cases_filtered['Days_Until'] < 0].sort_values('Days_Until')
+    upcoming = team_cases_filtered[team_cases_filtered['Days_Until'] >= 0].sort_values('Days_Until')
+    
+    total_cases = len(team_cases_filtered)
+    urgent_count = len(overdue)
+    upcoming_count = len(upcoming)
+    
+    rfe_excluded = is_rfe.sum()
+    
+    # Logo HTML
+    logo_html = ""
+    if logo_base64:
+        logo_html = f"""
+        <div class="footer-logo">
+            <img src="{logo_base64}" alt="Community Law Group" style="max-width: 180px; height: auto; border: none; display: block; margin: 0 auto;">
+        </div>
+        """
+    
+    # Generar HTML
     html = f"""
+    <!DOCTYPE html>
     <html>
     <head>
+        <meta charset="UTF-8">
         <style>
-            body {{ font-family: Arial, sans-serif; }}
-            .header {{ background-color: #1a3a5c; color: white; padding: 20px; text-align: center; }}
-            .content {{ padding: 20px; }}
-            table {{ border-collapse: collapse; width: 100%; margin-top: 20px; }}
-            th {{ background-color: #2a5a8c; color: white; padding: 10px; text-align: left; }}
-            td {{ border: 1px solid #ddd; padding: 8px; }}
-            tr:nth-child(even) {{ background-color: #f2f2f2; }}
-            .urgent {{ color: #c0392b; font-weight: bold; }}
-            .warning {{ color: #e67e22; font-weight: bold; }}
-            .footer {{ font-size: 11px; color: gray; text-align: center; margin-top: 30px; }}
+            * {{ margin: 0; padding: 0; box-sizing: border-box; }}
+            body {{ font-family: 'Segoe UI', Arial, sans-serif; background-color: #e8eef2; padding: 20px; }}
+            .email-container {{ max-width: 1100px; margin: 0 auto; background-color: #ffffff; border-radius: 12px; overflow: hidden; box-shadow: 0 4px 20px rgba(0,0,0,0.1); }}
+            .email-header {{ background-color: #f0f4f8; padding: 28px 36px; border-bottom: 2px solid #d0d8e4; }}
+            .logo {{ font-size: 28px; font-weight: 700; color: #1a2a3a; }}
+            .logo span {{ font-weight: 400; color: #3a5a7a; }}
+            .report-subtitle {{ font-size: 15px; color: #3a5a7a; margin-top: 6px; }}
+            .greeting {{ background-color: #f8fafc; padding: 24px 36px; border-bottom: 1px solid #e2e8f0; }}
+            .greeting h2 {{ font-size: 20px; font-weight: 600; color: #1a2a3a; margin-bottom: 8px; }}
+            .greeting p {{ font-size: 14px; color: #4a6a8a; }}
+            .urgent-alert {{ background-color: #c0392b; color: #ffffff; padding: 16px 24px; margin: 20px 36px 0 36px; border-radius: 10px; display: flex; align-items: center; gap: 15px; flex-wrap: wrap; }}
+            .urgent-alert-icon {{ font-size: 32px; font-weight: 700; }}
+            .urgent-alert-text {{ flex: 1; }}
+            .urgent-alert-text h3 {{ font-size: 18px; font-weight: 700; }}
+            .urgent-count {{ background-color: rgba(255,255,255,0.25); padding: 6px 16px; border-radius: 30px; font-size: 24px; font-weight: 700; }}
+            .report-info {{ padding: 18px 36px; background-color: #ffffff; border-bottom: 1px solid #e2e8f0; display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 12px; margin-top: 20px; }}
+            .info-grid {{ display: flex; gap: 28px; flex-wrap: wrap; }}
+            .info-label {{ font-size: 11px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.8px; color: #6a7e9e; }}
+            .info-value {{ font-size: 14px; font-weight: 500; color: #1a2a3a; }}
+            .recipient-badge {{ background-color: #1a3a5c; color: #ffffff; padding: 6px 16px; border-radius: 30px; font-size: 13px; font-weight: 600; }}
+            .stats-title {{ padding: 20px 36px 0 36px; }}
+            .stats-title h3 {{ font-size: 16px; font-weight: 600; color: #1a2a3a; border-bottom: 2px solid #e2e8f0; padding-bottom: 8px; }}
+            .stats-container {{ padding: 0 36px 28px 36px; }}
+            .stats-grid {{ display: flex; gap: 20px; flex-wrap: wrap; }}
+            .stat-card {{ background-color: #f8fafc; padding: 22px 28px; border-radius: 12px; border: 1px solid #e2e8f0; min-width: 160px; }}
+            .stat-number {{ font-size: 36px; font-weight: 700; }}
+            .stat-label {{ font-size: 12px; font-weight: 600; color: #6a7e9e; text-transform: uppercase; }}
+            .text-urgent {{ color: #c0392b; }}
+            .text-warning {{ color: #e67e22; }}
+            .table-section {{ margin: 28px 36px; }}
+            .section-header {{ border-bottom: 2px solid #e2e8f0; padding-bottom: 10px; display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 10px; }}
+            .section-title {{ font-size: 17px; font-weight: 700; color: #1a2a3a; }}
+            .section-badge {{ background-color: #e8eef2; color: #3a5a7a; padding: 4px 12px; border-radius: 20px; font-size: 12px; font-weight: 600; }}
+            .data-table {{ width: 100%; border-collapse: collapse; font-size: 13px; border: 1px solid #e2e8f0; border-radius: 10px; overflow: hidden; }}
+            .data-table th {{ background-color: #f0f4f8; color: #1a2a3a; font-weight: 700; padding: 12px 14px; text-align: left; border-bottom: 2px solid #e2e8f0; }}
+            .data-table td {{ padding: 12px 14px; border-bottom: 1px solid #eef2f6; color: #2a3a4a; }}
+            .data-table tr:last-child td {{ border-bottom: none; }}
+            .days-critical {{ color: #c0392b; background-color: #fee2e2; padding: 4px 12px; border-radius: 20px; font-weight: 700; }}
+            .days-warning {{ color: #92400e; background-color: #fef3c7; padding: 4px 12px; border-radius: 20px; font-weight: 700; }}
+            .days-info {{ color: #1e40af; background-color: #dbeafe; padding: 4px 12px; border-radius: 20px; font-weight: 700; }}
+            .rfe-note {{ background-color: #fef3c7; border-left: 4px solid #e67e22; padding: 12px 20px; margin: 20px 36px; border-radius: 8px; font-size: 12px; color: #92400e; }}
+            .email-footer {{ background-color: #f0f4f8; padding: 20px 36px; border-top: 1px solid #e2e8f0; text-align: center; margin-top: 20px; }}
+            .footer-text {{ font-size: 11px; color: #6a7e9e; margin-bottom: 5px; }}
+            .footer-note {{ font-size: 10px; color: #8a9eb8; }}
+            .footer-logo {{ margin: 10px 0 8px 0; }}
+            @media (max-width: 700px) {{
+                .email-header, .greeting, .report-info, .stats-title, .stats-container, .table-section, .email-footer {{
+                    padding-left: 20px; padding-right: 20px;
+                }}
+                .urgent-alert {{ margin-left: 20px; margin-right: 20px; }}
+                .stats-grid {{ gap: 12px; }}
+                .stat-card {{ padding: 16px 20px; min-width: 130px; }}
+                .data-table th, .data-table td {{ padding: 8px 10px; font-size: 11px; }}
+            }}
         </style>
     </head>
     <body>
-        <div class="header">
-            <h2>ST LEGAL AUTOMATED</h2>
-            <p>Sistema de Alertas de Casos</p>
-        </div>
-        <div class="content">
-            <h3>Hola, {team_name}</h3>
-            <p>Tienes <strong>{len(team_cases)} casos</strong> que requieren atención en los próximos {days_before} días.</p>
-            
-            <table>
-                <thead>
-                    <tr>
-                        <th>Case #</th>
-                        <th>Case Type</th>
-                        <th>Case Status</th>
-                        <th>Deadline</th>
-                        <th>Desktime</th>
-                    </tr>
-                </thead>
-                <tbody>
+        <div class="email-container">
+            <div class="email-header">
+                <div class="logo">LEGAL SUPPORT TEAM <span>ALERTING SYSTEM</span></div>
+                <div class="report-subtitle">Deadline and Case Management System</div>
+            </div>
+            <div class="greeting">
+                <h2>Hello, {team_name}</h2>
+                <p>Below are the cases assigned to your team that require attention. Please review the information and take necessary actions.</p>
+            </div>
     """
     
-    for _, row in team_cases.iterrows():
-        desktime = row.get('Desktime', 'N/A')
-        color_class = 'urgent' if desktime == 'Out of Desktime' else 'warning' if desktime == 'On time' else ''
+    if len(overdue) > 0:
         html += f"""
-                    <tr>
-                        <td>{row.get('Case #', 'N/A')}</td>
-                        <td>{row.get('Case Type', 'N/A')}</td>
-                        <td>{row.get('Case Status', 'N/A')}</td>
-                        <td>{row.get('Deadline', 'N/A')}</td>
-                        <td class="{color_class}">{desktime}</td>
-                    </tr>
+            <div class="urgent-alert">
+                <div class="urgent-alert-icon">⚠️</div>
+                <div class="urgent-alert-text">
+                    <h3>PRIORITY ATTENTION REQUIRED</h3>
+                    <p>There {'is' if len(overdue) == 1 else 'are'} {len(overdue)} case(s) that have passed their deadline.</p>
+                </div>
+                <div class="urgent-count">{len(overdue)}</div>
+            </div>
         """
     
     html += f"""
-                </tbody>
-            </table>
-            <p style="margin-top: 20px;">Por favor revisa estos casos y toma las acciones necesarias.</p>
-        </div>
-        <div class="footer">
-            <p>ST LEGAL Automated System - Reporte generado automáticamente</p>
-            <p>© {today.year} ST LEGAL - Todos los derechos reservados</p>
+            <div class="report-info">
+                <div class="info-grid">
+                    <div class="info-item">
+                        <span class="info-label">DATE</span>
+                        <span class="info-value">{fecha_referencia.strftime('%m/%d/%Y')}</span>
+                    </div>
+                    <div class="info-item">
+                        <span class="info-label">ALERT PERIOD</span>
+                        <span class="info-value">Next {DAYS_BEFORE} days</span>
+                    </div>
+                </div>
+                <div class="recipient-badge">Responsible: {team_name}</div>
+            </div>
+            <div class="stats-title"><h3>Case Summary</h3></div>
+            <div class="stats-container">
+                <div class="stats-grid">
+                    <div class="stat-card">
+                        <div class="stat-number"><strong>{total_cases}</strong></div>
+                        <div class="stat-label">Total Cases</div>
+                    </div>
+                    <div class="stat-card">
+                        <div class="stat-number"><strong class="text-urgent">{urgent_count}</strong></div>
+                        <div class="stat-label">Overdue Cases</div>
+                    </div>
+                    <div class="stat-card">
+                        <div class="stat-number"><strong class="text-warning">{upcoming_count}</strong></div>
+                        <div class="stat-label">Upcoming Deadline</div>
+                    </div>
+                </div>
+            </div>
+    """
+    
+    if len(overdue) > 0:
+        html += f"""
+            <div class="table-section">
+                <div class="section-header">
+                    <div class="section-title">OVERDUE CASES</div>
+                    <div class="section-badge">{len(overdue)} cases</div>
+                </div>
+                <table class="data-table">
+                    <thead><tr><th>Case ID</th><th>Case Type</th><th>Current Status</th><th>Deadline</th><th>Status</th><th>Office</th></tr></thead>
+                    <tbody>
+        """
+        for _, row in overdue.iterrows():
+            days_overdue = abs(row['Days_Until'])
+            style_class, days_text = get_days_style(-days_overdue)
+            html += f"""
+                <tr>
+                    <td><strong>{row.get('Case #', 'N/A')}</strong></td>
+                    <td>{row.get('Case Type', 'N/A')}</td>
+                    <td>{row.get('Case Status', 'N/A')}</td>
+                    <td>{row.get('Deadline', 'N/A')}</td>
+                    <td><span class="{style_class}">{days_text}</span></td>
+                    <td>{row.get('Office Name', 'N/A')}</td>
+                </tr>
+            """
+        html += "</tbody></table></div>"
+    
+    if len(upcoming) > 0:
+        html += f"""
+            <div class="table-section">
+                <div class="section-header">
+                    <div class="section-title">UPCOMING DEADLINE CASES</div>
+                    <div class="section-badge">{len(upcoming)} cases</div>
+                </div>
+                <table class="data-table">
+                    <thead><tr><th>Case ID</th><th>Case Type</th><th>Current Status</th><th>Deadline</th><th>Days Remaining</th><th>Office</th></tr></thead>
+                    <tbody>
+        """
+        for _, row in upcoming.iterrows():
+            days_left = row['Days_Until']
+            style_class, days_text = get_days_style(days_left)
+            html += f"""
+                <tr>
+                    <td><strong>{row.get('Case #', 'N/A')}</strong></td>
+                    <td>{row.get('Case Type', 'N/A')}</td>
+                    <td>{row.get('Case Status', 'N/A')}</td>
+                    <td>{row.get('Deadline', 'N/A')}</td>
+                    <td><span class="{style_class}">{days_text}</span></td>
+                    <td>{row.get('Office Name', 'N/A')}</td>
+                </tr>
+            """
+        html += "</tbody></table></div>"
+    
+    if rfe_excluded > 0:
+        html += f"""
+            <div class="rfe-note">
+                ℹ️ <strong>Note:</strong> {rfe_excluded} case(s) with RFE status have been excluded from this report.
+            </div>
+        """
+    
+    html += f"""
+            <div class="email-footer">
+                <div class="footer-text">Legal Support Team Alerting System - Automatically generated</div>
+                {logo_html}
+                <div class="footer-note">© {fecha_referencia.year} Community Law Group · All rights reserved</div>
+            </div>
         </div>
     </body>
     </html>
     """
+    
     return html
 
-# ============================================
-# CLASE PROCESAR CASES
-# ============================================
-class CaseProcessor:
-    def __init__(self, df: pd.DataFrame):
-        self.df = df
-        self.keep_columns = [
-            "Case Created Date", "Office Name", "Case Type", "Case Status",
-            "Case Number", "Deadline", "Deadline Status",
-            "TeamOwner", "Case #", "Desktime"
-        ]
-    
-    def clean_column_names(self):
-        self.df.columns = self.df.columns.str.strip()
-    
-    def filter_columns(self):
-        existing_cols = [col for col in self.keep_columns if col in self.df.columns]
-        self.df = self.df[existing_cols]
-        return existing_cols
-    
-    def add_case_hash_column(self):
-        def first_digit_run(text):
-            if pd.isna(text):
-                return ""
-            match = re.search(r'\d+', str(text))
-            return match.group(0) if match else ""
-        
-        if "Case Number" in self.df.columns:
-            self.df["Case #"] = self.df["Case Number"].apply(first_digit_run)
-            return True
-        return False
-    
-    def add_desktime_column(self):
-        if "Deadline" in self.df.columns:
-            today = datetime.now().date()
-            def calc_desktime(deadline):
-                if pd.isna(deadline) or deadline == "":
-                    return "No Deadline"
-                try:
-                    deadline_date = pd.to_datetime(deadline).date()
-                    if deadline_date > today:
-                        return "On time"
-                    else:
-                        return "Out of Desktime"
-                except:
-                    return "No Deadline"
-            self.df["Desktime"] = self.df["Deadline"].apply(calc_desktime)
-            return True
-        return False
-    
-    def load_team_mapping_from_file(self, mapping_file):
-        try:
-            df_mapping = pd.read_excel(mapping_file)
-            if len(df_mapping.columns) >= 2:
-                mapping = dict(zip(
-                    df_mapping.iloc[:, 0].astype(str).str.strip(),
-                    df_mapping.iloc[:, 1].astype(str).str.strip()
-                ))
-                return mapping
-            return None
-        except Exception as e:
-            st.error(f"Error al cargar archivo de mapeo: {e}")
-            return None
-    
-    def get_auto_mapping(self):
-        unique_types = self.df["Case Type"].dropna().unique()
-        mapping = {}
-        for ct in unique_types:
-            ct_str = str(ct).lower()
-            if "adjustment" in ct_str or "aos" in ct_str:
-                mapping[ct] = "Team AOS"
-            elif "naturalization" in ct_str or "n400" in ct_str:
-                mapping[ct] = "Team Naturalization"
-            elif "consular" in ct_str:
-                mapping[ct] = "Team Consular"
-            elif "rfe" in ct_str:
-                mapping[ct] = "Team RFE"
-            elif "interview" in ct_str:
-                mapping[ct] = "Team Interviews"
-            else:
-                mapping[ct] = "Team General"
-        return mapping
-    
-    def add_team_owner_column(self, mapping_file=None):
-        if "Case Type" not in self.df.columns:
-            return False
-        
-        if mapping_file is not None:
-            team_mapping = self.load_team_mapping_from_file(mapping_file)
-            if team_mapping:
-                self.df["TeamOwner"] = self.df["Case Type"].astype(str).str.strip().map(team_mapping)
-                null_count = self.df["TeamOwner"].isna().sum()
-                if null_count > 0:
-                    st.warning(f"⚠️ {null_count} casos sin mapeo. Usando mapeo automático para esos.")
-                    auto_mapping = self.get_auto_mapping()
-                    mask_null = self.df["TeamOwner"].isna()
-                    self.df.loc[mask_null, "TeamOwner"] = self.df.loc[mask_null, "Case Type"].map(auto_mapping)
-                return True
-        
-        auto_mapping = self.get_auto_mapping()
-        self.df["TeamOwner"] = self.df["Case Type"].map(auto_mapping)
-        return True
-    
-    def filter_by_status(self):
-        if "Case Status" in self.df.columns and "Deadline Status" in self.df.columns:
-            rfe_mask = self.df["Case Status"].astype(str).str.upper().str.contains('RFE', na=False)
-            self.df = self.df[rfe_mask | (self.df["Deadline Status"] != "SATISFIED")]
-            return True
-        return False
-    
-    def remove_duplicates(self):
-        if "Case Type" in self.df.columns and "Case #" in self.df.columns:
-            before = len(self.df)
-            self.df = self.df.drop_duplicates(subset=["Case Type", "Case #"], keep='first')
-            return before - len(self.df)
-        return 0
-    
-    def reorder_columns(self):
-        final_order = [
-            "Case Created Date", "Office Name", "Case Type", "TeamOwner", "Case Status",
-            "Case Number", "Case #", "Deadline", "Desktime", "Deadline Status"
-        ]
-        existing_order = [col for col in final_order if col in self.df.columns]
-        self.df = self.df[existing_order]
-    
-    def process(self, mapping_file=None):
-        self.clean_column_names()
-        self.filter_columns()
-        self.add_case_hash_column()
-        self.add_desktime_column()
-        self.add_team_owner_column(mapping_file)
-        self.filter_by_status()
-        dups = self.remove_duplicates()
-        self.reorder_columns()
-        return self.df, dups
+# ============================================================
+# FUNCIÓN PARA ENVIAR CORREO VÍA SMTP
+# ============================================================
 
-# ============================================
-# CLASE SISTEMA ALARMAS
-# ============================================
-class AlertSystem:
-    def __init__(self, df: pd.DataFrame):
-        self.df = df
-        self.today = datetime.now().date()
-    
-    def calculate_days_until_deadline(self, deadline_str):
-        if pd.isna(deadline_str) or deadline_str == "":
-            return None
-        try:
-            if isinstance(deadline_str, (datetime, pd.Timestamp)):
-                deadline_date = deadline_str.date()
-            else:
-                deadline_date = pd.to_datetime(deadline_str).date()
-            return (deadline_date - self.today).days
-        except:
-            return None
-    
-    def get_alerts_by_team(self, days_before=7, days_after=3):
-        df_alerts = self.df.copy()
-        df_alerts['Days_Until'] = df_alerts['Deadline'].apply(self.calculate_days_until_deadline)
+def enviar_correo_smtp(smtp_server, smtp_port, username, password, to_emails, cc_emails,
+                       subject, html_body, sender_name="Legal Support Team"):
+    """Envía correo usando SMTP de Outlook"""
+    try:
+        msg = MIMEMultipart('alternative')
+        msg['Subject'] = subject
+        msg['From'] = username
+        msg['To'] = ", ".join(to_emails)
+        if cc_emails:
+            msg['CC'] = ", ".join(cc_emails)
+        msg['X-Priority'] = '1'  # Alta prioridad
         
-        mask_upcoming = (df_alerts['Days_Until'] >= 0) & (df_alerts['Days_Until'] <= days_before)
-        mask_overdue = (df_alerts['Days_Until'] < 0) & (df_alerts['Days_Until'] >= -days_after)
+        # Adjuntar HTML
+        msg.attach(MIMEText(html_body, 'html'))
         
-        df_alerts = df_alerts[mask_upcoming | mask_overdue].copy()
+        # Conectar y enviar
+        context = ssl.create_default_context()
+        with smtplib.SMTP(smtp_server, smtp_port) as server:
+            server.starttls(context=context)
+            server.login(username, password)
+            
+            # Lista de destinatarios (TO + CC)
+            all_recipients = to_emails + (cc_emails if cc_emails else [])
+            server.sendmail(username, all_recipients, msg.as_string())
         
-        alerts_by_team = {}
-        if 'TeamOwner' in df_alerts.columns:
-            for team in df_alerts['TeamOwner'].dropna().unique():
-                team_cases = df_alerts[df_alerts['TeamOwner'] == team]
-                if len(team_cases) > 0:
-                    alerts_by_team[team] = team_cases
-        
-        return alerts_by_team, df_alerts
-    
-    def get_summary_stats(self):
-        total = len(self.df)
-        overdue = len(self.df[self.df['Desktime'] == "Out of Desktime"]) if 'Desktime' in self.df.columns else 0
-        upcoming = len(self.df[self.df['Desktime'] == "On time"]) if 'Desktime' in self.df.columns else 0
-        
-        return {
-            'total': total,
-            'overdue': overdue,
-            'upcoming': upcoming
-        }
+        return True, "Correo enviado exitosamente"
+    except Exception as e:
+        return False, f"Error al enviar: {str(e)}"
 
-# ============================================
-# INICIALIZAR SESSION STATE
-# ============================================
-if 'df_procesado' not in st.session_state:
-    st.session_state.df_procesado = None
-if 'df_original' not in st.session_state:
-    st.session_state.df_original = None
-if 'procesado' not in st.session_state:
-    st.session_state.procesado = False
-if 'alert_history' not in st.session_state:
-    st.session_state.alert_history = []
-if 'team_emails' not in st.session_state:
-    st.session_state.team_emails = {}
+# ============================================================
+# FUNCIÓN PRINCIPAL DE PROCESAMIENTO
+# ============================================================
 
-# ============================================
-# HEADER PRINCIPAL
-# ============================================
-st.markdown("""
-<div class="main-header">
-    <h1>⚖️ ST LEGAL AUTOMATED</h1>
-    <p>Sistema de Procesamiento y Alertas de Casos</p>
-</div>
-""", unsafe_allow_html=True)
-
-# ============================================
-# SIDEBAR - MENÚ PRINCIPAL Y CONFIGURACIÓN DE CORREO
-# ============================================
-with st.sidebar:
-    st.image("https://img.icons8.com/color/96/000000/law.png", width=80)
-    st.markdown("---")
+def procesar_alertas(df, fecha_referencia, smtp_username, smtp_password, 
+                     test_email=None, enviar_reales=False):
+    """Procesa las alertas y envía correos"""
     
-    menu = st.radio(
-        "📋 MENÚ",
-        ["📊 Dashboard", "📁 1. Cargar Datos", "⚙️ 2. Procesar Datos", "📧 3. Enviar Alertas", "📜 Historial"]
+    resultados = []
+    errores = []
+    
+    # Validar columnas
+    if 'TeamOwner' not in df.columns:
+        return [], ["❌ Error: La columna 'TeamOwner' no existe en el archivo"]
+    
+    df['TeamOwner'] = df['TeamOwner'].astype(str).str.strip()
+    df['TeamOwner'] = df['TeamOwner'].replace({'KIa': 'Kia', 'kia': 'Kia', 'KIA': 'Kia'})
+    
+    # Filtrar por fechas
+    df_temp = df.copy()
+    
+    # Calcular días hasta deadline
+    if 'Deadline' not in df_temp.columns:
+        return [], ["❌ Error: La columna 'Deadline' no existe en el archivo"]
+    
+    df_temp['Days_Until'] = df_temp['Deadline'].apply(
+        lambda x: calcular_dias_hasta_deadline(x, fecha_referencia)
     )
     
-    st.markdown("---")
+    # Filtrar casos que requieren alerta
+    mask_upcoming = (df_temp['Days_Until'] >= 0) & (df_temp['Days_Until'] <= DAYS_BEFORE)
+    mask_overdue = (df_temp['Days_Until'] < 0) & (df_temp['Days_Until'] >= -DAYS_AFTER)
+    df_alerts = df_temp[mask_upcoming | mask_overdue].copy()
     
-    # CONFIGURACIÓN DE CORREO
-    st.subheader("📧 Configuración de Correo")
+    if len(df_alerts) == 0:
+        return [], ["⚠️ No hay casos que requieran alerta en el período seleccionado"]
     
-    usar_correos_reales = st.checkbox("✅ Enviar correos REALES", value=False)
+    # Agrupar por equipo
+    alerts_by_team = {}
+    for team in df_alerts['TeamOwner'].dropna().unique():
+        team_cases = df_alerts[df_alerts['TeamOwner'] == team]
+        if len(team_cases) > 0:
+            alerts_by_team[team] = team_cases
     
-    smtp_config = {
-        'server': None,
-        'port': None,
-        'sender': None,
-        'password': None
-    }
+    if not alerts_by_team:
+        return [], ["⚠️ No se encontraron equipos con alertas"]
     
-    if usar_correos_reales:
-        st.warning("⚠️ Configura tu correo para enviar emails reales")
-        smtp_config['server'] = st.text_input("Servidor SMTP", value="smtp.office365.com")
-        smtp_config['port'] = st.number_input("Puerto SMTP", value=587)
-        smtp_config['sender'] = st.text_input("Email remitente", value="alerts@stlegal.com")
-        smtp_config['password'] = st.text_input("Contraseña", type="password")
+    # Logo para el correo
+    logo_base64 = None
+    if os.path.exists(LOGO_FILENAME):
+        with open(LOGO_FILENAME, 'rb') as f:
+            logo_base64 = get_logo_base64(f.read())
+    
+    # Procesar cada equipo
+    for team_name, team_cases in alerts_by_team.items():
+        html_body = generar_html_correo(team_cases, team_name, fecha_referencia, logo_base64)
         
-        if smtp_config['sender'] and smtp_config['password']:
-            st.success("✅ Configuración de correo lista")
+        if html_body is None:
+            resultados.append(f"⏭️ {team_name}: Todos los casos son RFE - omitido")
+            continue
+        
+        # Determinar destinatarios
+        if test_email:
+            to_email = [test_email]
+            cc_email = []
+            subject = f"[TEST] ST LEGAL - Case Report - {team_name} - {fecha_referencia.strftime('%m/%d/%Y')}"
         else:
-            st.error("❌ Completa la configuración de correo")
-    else:
-        st.info("ℹ️ Modo simulación - No se enviarán correos reales")
-    
-    st.markdown("---")
-    st.caption(f"Versión: 3.0.0\n{datetime.now().strftime('%d/%m/%Y')}")
-
-# ============================================
-# 1. DASHBOARD
-# ============================================
-if menu == "📊 Dashboard":
-    st.header("📊 Dashboard de Casos")
-    
-    if st.session_state.df_procesado is not None:
-        df = st.session_state.df_procesado
-        alert_system = AlertSystem(df)
-        stats = alert_system.get_summary_stats()
+            to_email = [get_team_email(team_name)] if get_team_email(team_name) else []
+            cc_email = get_cc_for_team(team_name)
+            subject = f"ST LEGAL - Case Deadline Report - {team_name} - {fecha_referencia.strftime('%m/%d/%Y')}"
         
-        col1, col2, col3, col4 = st.columns(4)
-        with col1:
-            st.metric("📋 Total Casos", stats['total'])
-        with col2:
-            st.metric("⚠️ Casos Vencidos", stats['overdue'], delta="URGENTE" if stats['overdue'] > 0 else None, delta_color="inverse")
-        with col3:
-            st.metric("📅 Próximos a Vencer", stats['upcoming'])
-        with col4:
-            teams = df['TeamOwner'].nunique() if 'TeamOwner' in df.columns else 0
-            st.metric("👥 Equipos", teams)
+        if not to_email:
+            resultados.append(f"❌ {team_name}: No hay email configurado")
+            continue
         
-        st.markdown("---")
-        
-        col1, col2 = st.columns(2)
-        with col1:
-            st.subheader("Casos por Equipo")
-            if 'TeamOwner' in df.columns:
-                team_counts = df['TeamOwner'].value_counts()
-                fig = px.bar(x=team_counts.index, y=team_counts.values, color_discrete_sequence=['#1a3a5c'])
-                fig.update_layout(showlegend=False, xaxis_title="Equipo", yaxis_title="Número de Casos")
-                st.plotly_chart(fig, use_container_width=True)
-        
-        with col2:
-            st.subheader("Estado de Plazos")
-            if 'Desktime' in df.columns:
-                desktime_counts = df['Desktime'].value_counts()
-                fig = px.pie(values=desktime_counts.values, names=desktime_counts.index, color_discrete_sequence=['#27ae60', '#e67e22', '#c0392b'])
-                st.plotly_chart(fig, use_container_width=True)
-        
-        st.subheader("🚨 Casos Prioritarios")
-        alerts_by_team, alert_df = alert_system.get_alerts_by_team()
-        
-        if len(alert_df) > 0:
-            display_cols = ['Case #', 'Case Type', 'Case Status', 'Deadline', 'TeamOwner', 'Desktime']
-            existing_cols = [col for col in display_cols if col in alert_df.columns]
-            st.dataframe(alert_df[existing_cols], use_container_width=True)
-        else:
-            st.info("✅ No hay casos prioritarios en este momento")
-        
-        with st.expander("📋 Ver todos los casos procesados"):
-            st.dataframe(df, use_container_width=True)
-        
-        output = io.BytesIO()
-        with pd.ExcelWriter(output, engine='openpyxl') as writer:
-            df.to_excel(writer, index=False)
-        st.download_button("📥 Descargar Excel Procesado", data=output.getvalue(), file_name="ST_LEGAL_Procesado.xlsx")
-        
-    else:
-        st.info("👈 Ve a 'Cargar Datos' y luego 'Procesar Datos' para comenzar")
-
-# ============================================
-# 2. CARGAR DATOS
-# ============================================
-elif menu == "📁 1. Cargar Datos":
-    st.header("📁 Cargar Archivo Original")
-    st.markdown("Sube el archivo **Case_Details.xlsx** (sin procesar)")
-    
-    archivo = st.file_uploader("Selecciona tu archivo Excel", type=['xlsx', 'xls'])
-    
-    if archivo is not None:
-        try:
-            df = pd.read_excel(archivo, header=2)
-            st.session_state.df_original = df
-            st.session_state.procesado = False
-            
-            st.success(f"✅ Archivo cargado exitosamente!")
-            st.info(f"📊 {df.shape[0]} filas, {df.shape[1]} columnas")
-            
-            st.subheader("Vista previa de los datos originales:")
-            st.dataframe(df.head(10), use_container_width=True)
-            
-            st.subheader("Columnas encontradas:")
-            st.write(list(df.columns))
-            
-        except Exception as e:
-            st.error(f"Error al cargar: {e}")
-
-# ============================================
-# 3. PROCESAR DATOS
-# ============================================
-elif menu == "⚙️ 2. Procesar Datos":
-    st.header("⚙️ Procesar Datos")
-    st.markdown("Aplica el mismo procesamiento que hace **procesar_cases.py**")
-    
-    if st.session_state.df_original is not None:
-        st.subheader("📋 Configuración de TeamOwner")
-        
-        usar_mapeo = st.radio(
-            "¿Cómo quieres asignar los TeamOwner?",
-            ["Usar archivo de mapeo (Listados de Casos.xlsx)", "Usar mapeo automático por palabras clave"]
-        )
-        
-        mapping_file = None
-        if usar_mapeo == "Usar archivo de mapeo (Listados de Casos.xlsx)":
-            mapping_upload = st.file_uploader(
-                "Sube el archivo 'Listados de Casos.xlsx'",
-                type=['xlsx', 'xls'],
-                key="mapping_upload"
+        if enviar_reales and smtp_username and smtp_password:
+            success, msg = enviar_correo_smtp(
+                SMTP_SERVER, SMTP_PORT,
+                smtp_username, smtp_password,
+                to_email, cc_email,
+                subject, html_body
             )
-            if mapping_upload:
-                mapping_file = mapping_upload
-                st.success("✅ Archivo de mapeo cargado")
-                df_map = pd.read_excel(mapping_file)
-                st.subheader("Vista previa del mapeo:")
-                st.dataframe(df_map.head(10), use_container_width=True)
+            if success:
+                resultados.append(f"✅ {team_name}: Enviado a {', '.join(to_email)}")
             else:
-                st.warning("⚠️ Por favor sube el archivo de mapeo o cambia a modo automático")
-        
-        if st.button("🚀 EJECUTAR PROCESAMIENTO", type="primary", use_container_width=True):
-            with st.spinner("Procesando datos... Esto puede tomar unos segundos"):
-                try:
-                    processor = CaseProcessor(st.session_state.df_original.copy())
-                    
-                    if usar_mapeo == "Usar archivo de mapeo (Listados de Casos.xlsx)":
-                        if mapping_file:
-                            df_procesado, dups = processor.process(mapping_file)
-                        else:
-                            st.error("❌ No se ha cargado el archivo de mapeo")
-                            st.stop()
-                    else:
-                        df_procesado, dups = processor.process(None)
-                    
-                    st.session_state.df_procesado = df_procesado
-                    st.session_state.procesado = True
-                    
-                    st.success("✅ Datos procesados exitosamente!")
-                    
-                    col1, col2, col3 = st.columns(3)
-                    with col1:
-                        st.metric("Filas originales", len(st.session_state.df_original))
-                    with col2:
-                        st.metric("Filas procesadas", len(df_procesado))
-                    with col3:
-                        st.metric("Duplicados eliminados", dups)
-                    
-                    # MOSTRAR LOS TEAMOWNER REALES
-                    if 'TeamOwner' in df_procesado.columns:
-                        st.subheader("📊 Equipos encontrados (TeamOwner)")
-                        equipos_reales = df_procesado['TeamOwner'].dropna().unique()
-                        st.write(f"**Equipos:** {', '.join(equipos_reales)}")
-                        
-                        # Distribución
-                        team_counts = df_procesado['TeamOwner'].value_counts()
-                        st.dataframe(team_counts.reset_index().rename(columns={'index': 'TeamOwner', 'TeamOwner': 'Cantidad'}), use_container_width=True)
-                    
-                    st.subheader("Vista previa de datos procesados:")
-                    st.dataframe(df_procesado.head(10), use_container_width=True)
-                    
-                    st.subheader("Columnas agregadas por el procesamiento:")
-                    nuevas = ['Case #', 'TeamOwner', 'Desktime']
-                    for col in nuevas:
-                        if col in df_procesado.columns:
-                            st.write(f"✅ `{col}` - Agregada correctamente")
-                    
-                    # CONFIGURAR EMAILS POR TEAMOWNER REAL
-                    st.subheader("📧 Configuración de emails por equipo")
-                    st.info("Ingresa los correos electrónicos para cada TeamOwner")
-                    
-                    equipos_reales = df_procesado['TeamOwner'].dropna().unique()
-                    for equipo in equipos_reales:
-                        email_key = f"email_{equipo.replace(' ', '_').replace('#', '')}"
-                        st.session_state.team_emails[equipo] = st.text_input(
-                            f"Email para {equipo}", 
-                            value=st.session_state.team_emails.get(equipo, ""),
-                            key=email_key,
-                            placeholder=f"correo@{equipo.replace(' ', '').lower()}.com"
-                        )
-                    
-                except Exception as e:
-                    st.error(f"Error durante el procesamiento: {e}")
-    else:
-        st.warning("⚠️ Primero carga un archivo en 'Cargar Datos'")
-
-# ============================================
-# 4. ENVIAR ALERTAS
-# ============================================
-elif menu == "📧 3. Enviar Alertas":
-    st.header("📧 Sistema de Alertas")
-    st.markdown("Genera alertas basadas en el archivo procesado")
-    
-    if st.session_state.df_procesado is not None:
-        df = st.session_state.df_procesado
-        alert_system = AlertSystem(df)
-        stats = alert_system.get_summary_stats()
-        
-        col1, col2, col3 = st.columns(3)
-        with col1:
-            days_before = st.slider("Días antes del vencimiento", 1, 30, 7)
-        with col2:
-            days_after = st.slider("Días después del vencimiento", 0, 30, 3)
-        with col3:
-            st.write("")
-            st.write("")
-            enviar_reales = st.checkbox("📧 ENVIAR CORREOS REALES", value=False)
-        
-        st.markdown("---")
-        
-        st.subheader("📊 Estadísticas actuales")
-        col1, col2, col3 = st.columns(3)
-        with col1:
-            st.metric("Total casos", stats['total'])
-        with col2:
-            st.metric("Vencidos", stats['overdue'], delta="URGENTE" if stats['overdue'] > 0 else None)
-        with col3:
-            st.metric("Próximos", stats['upcoming'])
-        
-        alerts_by_team, alert_df = alert_system.get_alerts_by_team(days_before, days_after)
-        
-        st.markdown("---")
-        st.subheader(f"📋 Casos que requieren atención: {len(alert_df)}")
-        
-        if len(alert_df) > 0:
-            for team, team_cases in alerts_by_team.items():
-                with st.expander(f"📧 {team} - {len(team_cases)} casos pendientes"):
-                    display_df = team_cases[['Case #', 'Case Type', 'Case Status', 'Deadline', 'Desktime']].copy()
-                    st.dataframe(display_df, use_container_width=True)
-                    
-                    email_destino = st.session_state.team_emails.get(team, "")
-                    if email_destino:
-                        st.info(f"📧 Email configurado: {email_destino}")
-                    else:
-                        st.warning(f"⚠️ No hay email configurado para {team}. Ve a 'Procesar Datos' y configura los emails.")
-                    
-                    if st.button(f"Enviar alerta a {team}", key=f"btn_{team}"):
-                        if enviar_reales:
-                            if email_destino:
-                                if usar_correos_reales and smtp_config['sender'] and smtp_config['password']:
-                                    cuerpo = generar_cuerpo_correo(team, team_cases, days_before)
-                                    success, mensaje = enviar_correo_real(
-                                        email_destino,
-                                        f"ST LEGAL - Alerta de Casos - {team} - {datetime.now().strftime('%d/%m/%Y')}",
-                                        cuerpo,
-                                        smtp_config
-                                    )
-                                    if success:
-                                        st.success(f"✅ Correo REAL enviado a {team} ({email_destino})")
-                                        st.session_state.alert_history.append({
-                                            'fecha': datetime.now().strftime('%Y-%m-%d %H:%M:%S'),
-                                            'equipo': team,
-                                            'email': email_destino,
-                                            'casos': len(team_cases),
-                                            'modo': 'REAL'
-                                        })
-                                    else:
-                                        st.error(f"❌ Error al enviar: {mensaje}")
-                                else:
-                                    st.error("❌ Configura el correo en el panel lateral (sidebar)")
-                            else:
-                                st.error(f"❌ No hay email configurado para {team}")
-                        else:
-                            st.info(f"[SIMULACIÓN] Correo enviado a {team} ({email_destino if email_destino else 'sin email configurado'})")
-                            st.session_state.alert_history.append({
-                                'fecha': datetime.now().strftime('%Y-%m-%d %H:%M:%S'),
-                                'equipo': team,
-                                'email': email_destino if email_destino else 'no configurado',
-                                'casos': len(team_cases),
-                                'modo': 'SIMULACIÓN'
-                            })
-            
-            st.markdown("---")
-            st.subheader("📊 Resumen por equipo")
-            resumen = alert_df['TeamOwner'].value_counts().reset_index()
-            resumen.columns = ['Equipo', 'Casos Pendientes']
-            resumen['Email'] = resumen['Equipo'].map(lambda x: st.session_state.team_emails.get(x, "No configurado"))
-            st.dataframe(resumen, use_container_width=True)
-            
-            if st.button("📧 Enviar alertas a TODOS los equipos", type="primary"):
-                for team, team_cases in alerts_by_team.items():
-                    email_destino = st.session_state.team_emails.get(team, "")
-                    if enviar_reales:
-                        if email_destino and usar_correos_reales and smtp_config['sender'] and smtp_config['password']:
-                            cuerpo = generar_cuerpo_correo(team, team_cases, days_before)
-                            success, _ = enviar_correo_real(
-                                email_destino,
-                                f"ST LEGAL - Alerta de Casos - {team} - {datetime.now().strftime('%d/%m/%Y')}",
-                                cuerpo,
-                                smtp_config
-                            )
-                            if success:
-                                st.success(f"✅ Enviado a {team}")
-                            else:
-                                st.error(f"❌ Error con {team}")
-                        else:
-                            st.warning(f"⚠️ No se pudo enviar a {team} - falta configuración")
-                    else:
-                        st.info(f"[SIMULACIÓN] Enviado a {team}")
-                st.success("Proceso completado")
-                
+                errores.append(f"❌ {team_name}: {msg}")
         else:
-            st.info("✅ No hay casos que requieran alertas en este momento")
-    else:
-        st.warning("⚠️ Primero carga y procesa los datos")
-
-# ============================================
-# 5. HISTORIAL
-# ============================================
-elif menu == "📜 Historial":
-    st.header("📜 Historial de Alertas")
+            resultados.append(f"📄 {team_name}: Correo listo (modo simulación)")
+            # Guardar preview para depuración
+            with open(f"preview_{team_name}.html", 'w', encoding='utf-8') as f:
+                f.write(html_body)
+            resultados.append(f"   📄 Preview guardado: preview_{team_name}.html")
     
-    if len(st.session_state.alert_history) > 0:
-        historial_df = pd.DataFrame(st.session_state.alert_history)
-        st.dataframe(historial_df, use_container_width=True)
+    return resultados, errores
+
+# ============================================================
+# INTERFAZ STREAMLIT
+# ============================================================
+
+st.set_page_config(page_title="ST LEGAL Alert System", page_icon="⚖️", layout="wide")
+
+st.title("⚖️ ST LEGAL - Alert System (Cloud Version)")
+st.markdown("---")
+
+# Sidebar con configuración
+with st.sidebar:
+    st.header("📧 Configuración SMTP")
+    st.markdown("Ingresa tus credenciales de Outlook para enviar correos")
+    
+    smtp_username = st.text_input("Correo de Outlook", value="", placeholder="tu@email.com")
+    smtp_password = st.text_input("Contraseña", type="password", placeholder="Contraseña de Outlook")
+    
+    st.markdown("---")
+    st.header("📁 Archivo de Datos")
+    uploaded_file = st.file_uploader("Carga el archivo Excel", type=['xlsx', 'xls'])
+    
+    st.markdown("---")
+    st.header("⚙️ Configuración")
+    fecha_referencia = st.date_input("Fecha de referencia", value=datetime.now().date())
+    
+    test_mode = st.checkbox("Modo prueba (enviar a un solo correo)")
+    test_email = st.text_input("Correo de prueba") if test_mode else None
+    
+    st.markdown("---")
+    enviar_reales = st.button("📨 Enviar Correos Reales", type="primary")
+    simular = st.button("📄 Solo Simulación (sin enviar)")
+
+# Área principal
+col1, col2 = st.columns([2, 1])
+
+with col1:
+    if uploaded_file is not None:
+        st.success(f"✅ Archivo cargado: {uploaded_file.name}")
         
-        st.subheader("📊 Estadísticas de envíos")
-        col1, col2 = st.columns(2)
-        with col1:
-            total_envios = len(historial_df)
-            st.metric("Total de envíos", total_envios)
-        with col2:
-            reales = len(historial_df[historial_df['modo'] == 'REAL']) if 'modo' in historial_df.columns else 0
-            st.metric("Correos reales enviados", reales)
+        # Leer archivo
+        df = pd.read_excel(uploaded_file)
+        st.info(f"📊 Registros cargados: {len(df)}")
         
-        if st.button("🗑️ Limpiar historial"):
-            st.session_state.alert_history = []
-            st.rerun()
+        # Mostrar vista previa
+        with st.expander("👁️ Vista previa de datos"):
+            st.dataframe(df.head(10))
+        
+        # Procesar cuando se haga clic en un botón
+        if enviar_reales or simular:
+            if enviar_reales and (not smtp_username or not smtp_password):
+                st.error("❌ Por favor ingresa tus credenciales de Outlook para enviar correos reales")
+            else:
+                with st.spinner("Procesando alertas..."):
+                    resultados, errores = procesar_alertas(
+                        df, fecha_referencia, smtp_username, smtp_password,
+                        test_email, enviar_reales
+                    )
+                
+                # Mostrar resultados
+                st.markdown("---")
+                st.subheader("📋 Resultados")
+                
+                if errores:
+                    for err in errores:
+                        st.error(err)
+                
+                for res in resultados:
+                    if res.startswith("✅"):
+                        st.success(res)
+                    elif res.startswith("❌"):
+                        st.error(res)
+                    else:
+                        st.info(res)
     else:
-        st.info("No hay alertas en el historial aún")
+        st.info("📌 Carga un archivo Excel en la barra lateral para comenzar")
+
+with col2:
+    st.markdown("""
+    ### 📋 Instrucciones
+    
+    1. **Configura tu correo** en la barra lateral
+    2. **Carga el archivo Excel** con los datos
+    3. **Selecciona la fecha de referencia**
+    4. **Simula** para probar sin enviar
+    5. **Envía** para enviar correos reales
+    
+    ### 📌 Columnas requeridas en el Excel
+    - `TeamOwner`
+    - `Deadline`
+    - `Case #`
+    - `Case Type`
+    - `Case Status`
+    - `Office Name`
+    
+    ### 🔒 Seguridad
+    - Las credenciales no se guardan
+    - La conexión SMTP usa TLS
+    - Solo se usa durante la sesión
+    """)
+
+st.markdown("---")
+st.caption("ST LEGAL Alert System - Versión Cloud | Desarrollado por Data & Efficiency Team")
