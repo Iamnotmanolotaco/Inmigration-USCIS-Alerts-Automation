@@ -133,7 +133,7 @@ def get_team_email(team_name):
             "Alonso": "Legalassistant2@communitylawgroup.com",
             "Francy": "legalsupport11@communitylawgroup.com",
             "Kevin": "legalsupport12@communitylawgroup.com",
-            "Juliana": "legalsupport4@communitylawgroup.com",,
+            "Juliana": "legalsupport4@communitylawgroup.com",
     }
     return team_emails.get(team_name.strip(), None)
 
