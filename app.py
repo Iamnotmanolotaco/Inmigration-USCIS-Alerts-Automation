@@ -13,6 +13,7 @@ import re
 import requests
 import time
 from io import BytesIO
+from PIL import Image  # Para redimensionar el logo
 
 # ============================================================
 # CONFIGURACIÓN
@@ -26,9 +27,10 @@ URL_BANNER_GITHUB = "https://raw.githubusercontent.com/Iamnotmanolotaco/Inmigrat
 
 DAYS_BEFORE = 7
 DAYS_AFTER = 30
+LOGO_WIDTH = 180  # Ancho fijo del logo en píxeles
 
 # ============================================================
-# FUNCIONES PARA OBTENER RECURSOS DESDE GITHUB
+# FUNCIONES PARA OBTENER Y REDIMENSIONAR LOGO
 # ============================================================
 
 def get_image_from_github(url):
@@ -41,8 +43,45 @@ def get_image_from_github(url):
     except Exception as e:
         return None
 
+def resize_logo(logo_bytes, target_width=LOGO_WIDTH):
+    """
+    Redimensiona el logo a un ancho fijo manteniendo la proporción.
+    Retorna los bytes de la imagen redimensionada.
+    """
+    try:
+        if logo_bytes is None:
+            return None
+        
+        # Abrir imagen desde bytes
+        img = Image.open(BytesIO(logo_bytes))
+        
+        # Calcular alto manteniendo proporción
+        original_width, original_height = img.size
+        aspect_ratio = original_height / original_width
+        target_height = int(target_width * aspect_ratio)
+        
+        # Redimensionar con LANCZOS (alta calidad)
+        img_resized = img.resize((target_width, target_height), Image.Resampling.LANCZOS)
+        
+        # Guardar en BytesIO
+        output = BytesIO()
+        img_resized.save(output, format='PNG', quality=95, optimize=True)
+        output.seek(0)
+        
+        print(f"   🖼️ Logo redimensionado: {target_width}x{target_height}px")
+        return output.getvalue()
+    except Exception as e:
+        print(f"   ⚠️ Error al redimensionar logo: {e}")
+        return logo_bytes  # Devolver original si falla
+
 def get_logo_bytes():
-    return get_image_from_github(URL_LOGO_GITHUB)
+    """
+    Obtiene el logo desde GitHub y lo redimensiona al ancho deseado.
+    """
+    logo_bytes = get_image_from_github(URL_LOGO_GITHUB)
+    if logo_bytes:
+        return resize_logo(logo_bytes, LOGO_WIDTH)
+    return None
 
 def get_banner_base64():
     image_bytes = get_image_from_github(URL_BANNER_GITHUB)
@@ -129,14 +168,16 @@ def generar_html_correo(team_cases, team_name, fecha_referencia, logo_cid=None):
     upcoming_count = len(upcoming)
     rfe_excluded = is_rfe.sum()
     
-    # Logo HTML con CID
+    # Logo HTML con CID y tamaño forzado en todos los niveles
     logo_html = ""
     if logo_cid:
         logo_html = f"""
         <div class="footer-logo">
             <img src="cid:{logo_cid}" 
                  alt="Community Law Group" 
-                 style="max-width: 180px; height: auto; border: none; display: block; margin: 0 auto;">
+                 width="{LOGO_WIDTH}" 
+                 height="auto"
+                 style="width: {LOGO_WIDTH}px !important; height: auto !important; max-width: {LOGO_WIDTH}px !important; max-height: 80px !important; border: none !important; display: block !important; margin: 0 auto !important;">
         </div>
         """
     
@@ -190,7 +231,24 @@ def generar_html_correo(team_cases, team_name, fecha_referencia, logo_cid=None):
             .email-footer {{ background-color: #f0f4f8; padding: 20px 36px; border-top: 1px solid #e2e8f0; text-align: center; margin-top: 20px; }}
             .footer-text {{ font-size: 11px; color: #6a7e9e; margin-bottom: 5px; }}
             .footer-note {{ font-size: 10px; color: #8a9eb8; }}
-            .footer-logo {{ margin: 10px 0 8px 0; }}
+            
+            /* ============================================================
+               FIX: Tamaño del logo forzado en todos los niveles
+               ============================================================ */
+            .footer-logo {{
+                margin: 10px 0 8px 0;
+                text-align: center;
+            }}
+            .footer-logo img {{
+                width: {LOGO_WIDTH}px !important;
+                max-width: {LOGO_WIDTH}px !important;
+                height: auto !important;
+                max-height: 80px !important;
+                border: none !important;
+                display: block !important;
+                margin: 0 auto !important;
+            }}
+            
             @media (max-width: 700px) {{
                 .email-header, .greeting, .report-info, .stats-title, .stats-container, .table-section, .email-footer {{
                     padding-left: 20px; padding-right: 20px;
@@ -332,7 +390,7 @@ def generar_html_correo(team_cases, team_name, fecha_referencia, logo_cid=None):
     return html
 
 # ============================================================
-# FUNCIÓN PARA ENVIAR CORREO VÍA SMTP CON LOGO (CID) - CORREGIDA
+# FUNCIÓN PARA ENVIAR CORREO VÍA SMTP CON LOGO (CID)
 # ============================================================
 
 def enviar_correo_smtp(smtp_server, smtp_port, username, password, to_emails, cc_emails,
@@ -351,17 +409,13 @@ def enviar_correo_smtp(smtp_server, smtp_port, username, password, to_emails, cc
         html_part = MIMEText(html_body, 'html')
         msg.attach(html_part)
         
-        # ============================================================
-        # FIX: Adjuntar logo con CID correctamente
-        # ============================================================
+        # Adjuntar logo con CID correctamente
         if logo_bytes:
             try:
                 logo_cid = "company_logo_cid"
                 image_part = MIMEImage(logo_bytes)
-                # Configurar Content-ID correctamente (con < >)
                 image_part.add_header('Content-ID', f'<{logo_cid}>')
                 image_part.add_header('Content-Disposition', 'inline', filename='logo.png')
-                # Forzar que Outlook lo reconozca como imagen
                 image_part.add_header('X-Attachment-Id', logo_cid)
                 msg.attach(image_part)
                 print("   🖼️ Logo adjuntado correctamente con CID")
@@ -369,7 +423,6 @@ def enviar_correo_smtp(smtp_server, smtp_port, username, password, to_emails, cc
                 print(f"   ⚠️ Error al adjuntar logo: {e}")
         else:
             print("   ⚠️ No se pudo obtener el logo para adjuntar")
-        # ============================================================
         
         # Conectar y enviar
         context = ssl.create_default_context()
@@ -422,9 +475,7 @@ def procesar_alertas(df, fecha_referencia, smtp_username, smtp_password,
     if not alerts_by_team:
         return [], ["⚠️ No se encontraron equipos con alertas"]
     
-    # ============================================================
     # Obtener logo y verificar
-    # ============================================================
     logo_bytes = get_logo_bytes()
     logo_cid = "company_logo_cid" if logo_bytes else None
     
@@ -432,7 +483,6 @@ def procesar_alertas(df, fecha_referencia, smtp_username, smtp_password,
         print(f"✅ Logo obtenido: {len(logo_bytes)} bytes")
     else:
         print("⚠️ No se pudo obtener el logo para el correo")
-    # ============================================================
     
     for team_name, team_cases in alerts_by_team.items():
         html_body = generar_html_correo(team_cases, team_name, fecha_referencia, logo_cid)
@@ -556,15 +606,11 @@ st.set_page_config(
     initial_sidebar_state="expanded"
 )
 
-# ============================================================
-# INICIALIZAR ESTADO
-# ============================================================
-
 if 'dark_mode' not in st.session_state:
     st.session_state.dark_mode = False
 
 # ============================================================
-# CSS CON TEXTOS CORREGIDOS Y CONTRASTE MEJORADO
+# CSS DE LA INTERFAZ
 # ============================================================
 
 def inject_css(colors):
@@ -760,22 +806,6 @@ def inject_css(colors):
             border-color: {colors['card_border']} !important;
             margin: 12px 0 !important;
             opacity: 0.3 !important;
-        }}
-        
-        .card {{
-            background-color: {colors['card_bg']};
-            border-radius: 14px;
-            padding: 22px 26px;
-            box-shadow: 0 4px 12px {colors['shadow']};
-            border: 1px solid {colors['card_border']};
-            margin-bottom: 16px;
-            animation: fadeInUp 0.5s ease-out;
-            transition: all 0.3s ease;
-        }}
-        
-        .card:hover {{
-            transform: translateY(-2px);
-            box-shadow: 0 8px 25px {colors['shadow']};
         }}
         
         .metric-container {{
@@ -979,7 +1009,7 @@ def render_banner(colors):
         """, unsafe_allow_html=True)
 
 # ============================================================
-# CONFIGURACIÓN Y RENDERIZADO
+# CONFIGURACIÓN Y RENDERIZADO PRINCIPAL
 # ============================================================
 
 colors = get_colors(st.session_state.dark_mode)
