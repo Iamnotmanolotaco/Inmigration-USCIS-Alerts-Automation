@@ -13,7 +13,7 @@ import re
 import requests
 import time
 from io import BytesIO
-from PIL import Image  # Para redimensionar el logo
+from PIL import Image
 
 # ============================================================
 # CONFIGURACIÓN
@@ -72,12 +72,9 @@ def resize_logo(logo_bytes, target_width=LOGO_WIDTH):
         return output.getvalue()
     except Exception as e:
         print(f"   ⚠️ Error al redimensionar logo: {e}")
-        return logo_bytes  # Devolver original si falla
+        return logo_bytes
 
 def get_logo_bytes():
-    """
-    Obtiene el logo desde GitHub y lo redimensiona al ancho deseado.
-    """
     logo_bytes = get_image_from_github(URL_LOGO_GITHUB)
     if logo_bytes:
         return resize_logo(logo_bytes, LOGO_WIDTH)
@@ -168,7 +165,9 @@ def generar_html_correo(team_cases, team_name, fecha_referencia, logo_cid=None):
     upcoming_count = len(upcoming)
     rfe_excluded = is_rfe.sum()
     
-    # Logo HTML con CID y tamaño forzado en todos los niveles
+    # ============================================================
+    # Logo con tamaño proporcional (solo ancho fijo)
+    # ============================================================
     logo_html = ""
     if logo_cid:
         logo_html = f"""
@@ -176,8 +175,7 @@ def generar_html_correo(team_cases, team_name, fecha_referencia, logo_cid=None):
             <img src="cid:{logo_cid}" 
                  alt="Community Law Group" 
                  width="{LOGO_WIDTH}" 
-                 height="auto"
-                 style="width: {LOGO_WIDTH}px !important; height: auto !important; max-width: {LOGO_WIDTH}px !important; max-height: 80px !important; border: none !important; display: block !important; margin: 0 auto !important;">
+                 style="width: {LOGO_WIDTH}px; height: auto; border: none; display: block; margin: 0 auto;">
         </div>
         """
     
@@ -233,7 +231,7 @@ def generar_html_correo(team_cases, team_name, fecha_referencia, logo_cid=None):
             .footer-note {{ font-size: 10px; color: #8a9eb8; }}
             
             /* ============================================================
-               FIX: Tamaño del logo forzado en todos los niveles
+               Logo: solo ancho fijo, altura automática (proporcional)
                ============================================================ */
             .footer-logo {{
                 margin: 10px 0 8px 0;
@@ -241,9 +239,8 @@ def generar_html_correo(team_cases, team_name, fecha_referencia, logo_cid=None):
             }}
             .footer-logo img {{
                 width: {LOGO_WIDTH}px !important;
-                max-width: {LOGO_WIDTH}px !important;
                 height: auto !important;
-                max-height: 80px !important;
+                max-width: {LOGO_WIDTH}px !important;
                 border: none !important;
                 display: block !important;
                 margin: 0 auto !important;
@@ -395,7 +392,6 @@ def generar_html_correo(team_cases, team_name, fecha_referencia, logo_cid=None):
 
 def enviar_correo_smtp(smtp_server, smtp_port, username, password, to_emails, cc_emails,
                        subject, html_body, logo_bytes=None):
-    """Envía correo usando SMTP de Outlook con logo adjunto (CID)"""
     try:
         msg = MIMEMultipart('related')
         msg['Subject'] = subject
@@ -405,11 +401,9 @@ def enviar_correo_smtp(smtp_server, smtp_port, username, password, to_emails, cc
             msg['CC'] = ", ".join(cc_emails)
         msg['X-Priority'] = '1'
         
-        # Parte HTML
         html_part = MIMEText(html_body, 'html')
         msg.attach(html_part)
         
-        # Adjuntar logo con CID correctamente
         if logo_bytes:
             try:
                 logo_cid = "company_logo_cid"
@@ -424,7 +418,6 @@ def enviar_correo_smtp(smtp_server, smtp_port, username, password, to_emails, cc
         else:
             print("   ⚠️ No se pudo obtener el logo para adjuntar")
         
-        # Conectar y enviar
         context = ssl.create_default_context()
         with smtplib.SMTP(smtp_server, smtp_port) as server:
             server.starttls(context=context)
@@ -475,7 +468,6 @@ def procesar_alertas(df, fecha_referencia, smtp_username, smtp_password,
     if not alerts_by_team:
         return [], ["⚠️ No se encontraron equipos con alertas"]
     
-    # Obtener logo y verificar
     logo_bytes = get_logo_bytes()
     logo_cid = "company_logo_cid" if logo_bytes else None
     
