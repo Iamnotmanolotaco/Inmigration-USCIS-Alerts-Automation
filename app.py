@@ -641,6 +641,7 @@ def inject_css(colors):
             to {{ opacity: 1; transform: translateX(0); }}
         }}
         
+        /* Solo las métricas y secciones principales tienen animación */
         .animate {{ animation: fadeInUp 0.6s ease-out; }}
         .animate-delay-1 {{ animation-delay: 0.1s; }}
         .animate-delay-2 {{ animation-delay: 0.2s; }}
@@ -683,35 +684,38 @@ def inject_css(colors):
             font-weight: 600;
         }}
         
-        .sidebar-section {{
-            background: rgba(255,255,255,0.06);
+        /* Estilo para los botones de la barra lateral */
+        .sidebar-button {{
+            background: rgba(255,255,255,0.08);
             border-radius: 10px;
-            padding: 12px 16px;
-            margin-bottom: 12px;
-            border: 1px solid rgba(255,255,255,0.08);
+            padding: 10px 16px;
+            margin-bottom: 8px;
+            border: 1px solid rgba(255,255,255,0.10);
             transition: all 0.3s ease;
-            animation: fadeInUp 0.6s ease-out;
+            cursor: pointer;
+            display: flex;
+            align-items: center;
+            gap: 10px;
         }}
         
-        .sidebar-section:hover {{
-            background: rgba(255,255,255,0.10);
+        .sidebar-button:hover {{
+            background: rgba(255,255,255,0.16);
             border-color: {colors['blue']};
             transform: translateX(4px);
         }}
         
-        .sidebar-section .icon {{
+        .sidebar-button .icon {{
             font-size: 18px;
-            margin-right: 8px;
         }}
         
-        .sidebar-section .label {{
+        .sidebar-button .label {{
             font-weight: 700;
             color: {colors['text_sidebar']};
             font-size: 14px;
         }}
         
-        .sidebar-section .desc {{
-            font-size: 12px;
+        .sidebar-button .desc {{
+            font-size: 11px;
             color: {colors['text_secondary']};
             margin-top: 2px;
         }}
@@ -768,6 +772,7 @@ def inject_css(colors):
             font-size: 14px !important;
         }}
         
+        /* Botones principales sin animaciones extra */
         .css-1d391kg .stButton > button {{
             border-radius: 10px !important;
             font-weight: 700 !important;
@@ -1019,7 +1024,7 @@ inject_css(colors)
 render_banner(colors)
 
 # ============================================================
-# BARRA LATERAL
+# BARRA LATERAL - MODIFICADA CON BOTONES REALES
 # ============================================================
 
 with st.sidebar:
@@ -1030,11 +1035,13 @@ with st.sidebar:
     </div>
     """, unsafe_allow_html=True)
     
-    st.markdown("""
-    <div class="sidebar-section">
-        <div style="display: flex; align-items: center; gap: 8px;">
-            <span class="icon">🌙</span>
-            <span class="label">Modo oscuro</span>
+    # Botón de modo oscuro - con animación
+    st.markdown(f"""
+    <div class="sidebar-button" style="border-color: {colors['blue']}; background: rgba(74, 139, 194, 0.15);">
+        <span class="icon">🌙</span>
+        <div>
+            <div class="label">Modo oscuro</div>
+            <div class="desc">Alternar tema de la interfaz</div>
         </div>
     </div>
     """, unsafe_allow_html=True)
@@ -1044,50 +1051,54 @@ with st.sidebar:
         st.session_state.dark_mode = dark_mode_toggle
         st.rerun()
     
-    st.markdown("""
-    <div class="sidebar-section">
-        <div style="display: flex; align-items: center; gap: 8px;">
-            <span class="icon">📧</span>
-            <span class="label">Correo</span>
+    # Botón de correo - sin animación extra
+    st.markdown(f"""
+    <div class="sidebar-button">
+        <span class="icon">📧</span>
+        <div>
+            <div class="label">Correo</div>
+            <div class="desc">Configuración SMTP de Outlook</div>
         </div>
-        <div class="desc">Configuración SMTP de Outlook</div>
     </div>
     """, unsafe_allow_html=True)
     
     smtp_username = st.text_input("Usuario", value="", placeholder="tu@email.com", label_visibility="collapsed")
     smtp_password = st.text_input("Contraseña", type="password", placeholder="••••••••", label_visibility="collapsed")
     
-    st.markdown("""
-    <div class="sidebar-section">
-        <div style="display: flex; align-items: center; gap: 8px;">
-            <span class="icon">📁</span>
-            <span class="label">Datos</span>
+    # Botón de datos - sin animación extra
+    st.markdown(f"""
+    <div class="sidebar-button">
+        <span class="icon">📁</span>
+        <div>
+            <div class="label">Datos</div>
+            <div class="desc">Carga tu archivo Excel</div>
         </div>
-        <div class="desc">Carga tu archivo Excel</div>
     </div>
     """, unsafe_allow_html=True)
     
     uploaded_file = st.file_uploader("Archivo Excel", type=['xlsx', 'xls'], label_visibility="collapsed")
     
-    st.markdown("""
-    <div class="sidebar-section">
-        <div style="display: flex; align-items: center; gap: 8px;">
-            <span class="icon">⚙️</span>
-            <span class="label">Fecha</span>
+    # Botón de fecha - sin animación extra
+    st.markdown(f"""
+    <div class="sidebar-button">
+        <span class="icon">⚙️</span>
+        <div>
+            <div class="label">Fecha</div>
+            <div class="desc">Fecha de referencia</div>
         </div>
-        <div class="desc">Fecha de referencia</div>
     </div>
     """, unsafe_allow_html=True)
     
     fecha_referencia = st.date_input("Referencia", value=datetime.now().date(), label_visibility="collapsed")
     
-    st.markdown("""
-    <div class="sidebar-section">
-        <div style="display: flex; align-items: center; gap: 8px;">
-            <span class="icon">🔬</span>
-            <span class="label">Modo prueba</span>
+    # Botón de modo prueba - con animación
+    st.markdown(f"""
+    <div class="sidebar-button" style="border-color: {colors['yellow']}; background: rgba(241, 196, 15, 0.12);">
+        <span class="icon">🔬</span>
+        <div>
+            <div class="label">Modo prueba</div>
+            <div class="desc">Envía a un solo correo de prueba</div>
         </div>
-        <div class="desc">Envía a un solo correo de prueba</div>
     </div>
     """, unsafe_allow_html=True)
     
