@@ -27,7 +27,7 @@ URL_BANNER_GITHUB = "https://raw.githubusercontent.com/Iamnotmanolotaco/Inmigrat
 
 DAYS_BEFORE = 7
 DAYS_AFTER = 30
-LOGO_WIDTH = 180  # Ancho fijo del logo en píxeles
+LOGO_WIDTH = 180
 
 # ============================================================
 # FUNCIONES PARA OBTENER Y REDIMENSIONAR LOGO
@@ -44,34 +44,22 @@ def get_image_from_github(url):
         return None
 
 def resize_logo(logo_bytes, target_width=LOGO_WIDTH):
-    """
-    Redimensiona el logo a un ancho fijo manteniendo la proporción.
-    Retorna los bytes de la imagen redimensionada.
-    """
     try:
         if logo_bytes is None:
             return None
         
-        # Abrir imagen desde bytes
         img = Image.open(BytesIO(logo_bytes))
-        
-        # Calcular alto manteniendo proporción
         original_width, original_height = img.size
         aspect_ratio = original_height / original_width
         target_height = int(target_width * aspect_ratio)
-        
-        # Redimensionar con LANCZOS (alta calidad)
         img_resized = img.resize((target_width, target_height), Image.Resampling.LANCZOS)
         
-        # Guardar en BytesIO
         output = BytesIO()
         img_resized.save(output, format='PNG', quality=95, optimize=True)
         output.seek(0)
         
-        print(f"   🖼️ Logo redimensionado: {target_width}x{target_height}px")
         return output.getvalue()
     except Exception as e:
-        print(f"   ⚠️ Error al redimensionar logo: {e}")
         return logo_bytes
 
 def get_logo_bytes():
@@ -175,9 +163,6 @@ def generar_html_correo(team_cases, team_name, fecha_referencia, logo_cid=None):
     upcoming_count = len(upcoming)
     rfe_excluded = is_rfe.sum()
     
-    # ============================================================
-    # Logo con tamaño proporcional (solo ancho fijo)
-    # ============================================================
     logo_html = ""
     if logo_cid:
         logo_html = f"""
@@ -239,10 +224,6 @@ def generar_html_correo(team_cases, team_name, fecha_referencia, logo_cid=None):
             .email-footer {{ background-color: #f0f4f8; padding: 20px 36px; border-top: 1px solid #e2e8f0; text-align: center; margin-top: 20px; }}
             .footer-text {{ font-size: 11px; color: #6a7e9e; margin-bottom: 5px; }}
             .footer-note {{ font-size: 10px; color: #8a9eb8; }}
-            
-            /* ============================================================
-               Logo: solo ancho fijo, altura automática (proporcional)
-               ============================================================ */
             .footer-logo {{
                 margin: 10px 0 8px 0;
                 text-align: center;
@@ -255,7 +236,6 @@ def generar_html_correo(team_cases, team_name, fecha_referencia, logo_cid=None):
                 display: block !important;
                 margin: 0 auto !important;
             }}
-            
             @media (max-width: 700px) {{
                 .email-header, .greeting, .report-info, .stats-title, .stats-container, .table-section, .email-footer {{
                     padding-left: 20px; padding-right: 20px;
@@ -440,7 +420,7 @@ def enviar_correo_smtp(smtp_server, smtp_port, username, password, to_emails, cc
         return False, f"Error al enviar: {str(e)}"
 
 # ============================================================
-# FUNCIÓN PRINCIPAL DE PROCESAMIENTO
+# FUNCIÓN PRINCIPAL DE PROCESAMIENTO (OPTIMIZADA)
 # ============================================================
 
 def procesar_alertas(df, fecha_referencia, smtp_username, smtp_password, 
@@ -612,7 +592,7 @@ if 'dark_mode' not in st.session_state:
     st.session_state.dark_mode = False
 
 # ============================================================
-# CSS DE LA INTERFAZ
+# CSS DE LA INTERFAZ (OPTIMIZADO)
 # ============================================================
 
 def inject_css(colors):
@@ -641,7 +621,6 @@ def inject_css(colors):
             to {{ opacity: 1; transform: translateX(0); }}
         }}
         
-        /* Solo las métricas y secciones principales tienen animación */
         .animate {{ animation: fadeInUp 0.6s ease-out; }}
         .animate-delay-1 {{ animation-delay: 0.1s; }}
         .animate-delay-2 {{ animation-delay: 0.2s; }}
@@ -684,7 +663,6 @@ def inject_css(colors):
             font-weight: 600;
         }}
         
-        /* Estilo mejorado para los encabezados de sección de la barra lateral */
         .sidebar-header {{
             display: flex;
             align-items: center;
@@ -710,16 +688,6 @@ def inject_css(colors):
             color: {colors['text_secondary']};
             margin-left: auto;
             opacity: 0.6;
-        }}
-        
-        /* Espaciado entre secciones */
-        .sidebar-spacer {{
-            margin: 8px 0 4px 0;
-        }}
-        
-        /* Estilo para los controles en la barra lateral */
-        .sidebar-control {{
-            padding: 4px 0 8px 0;
         }}
         
         .css-1d391kg .stTextInput > div > div > input {{
@@ -774,7 +742,6 @@ def inject_css(colors):
             font-size: 14px !important;
         }}
         
-        /* Botones principales */
         .css-1d391kg .stButton > button {{
             border-radius: 10px !important;
             font-weight: 700 !important;
@@ -1026,7 +993,7 @@ inject_css(colors)
 render_banner(colors)
 
 # ============================================================
-# BARRA LATERAL - REDISEÑADA CON ELEMENTOS FUNCIONALES
+# BARRA LATERAL
 # ============================================================
 
 with st.sidebar:
@@ -1037,7 +1004,7 @@ with st.sidebar:
     </div>
     """, unsafe_allow_html=True)
     
-    # ==================== MODO OSCURO ====================
+    # Modo oscuro
     st.markdown(f"""
     <div class="sidebar-header">
         <span class="icon">🌙</span>
@@ -1046,7 +1013,6 @@ with st.sidebar:
     </div>
     """, unsafe_allow_html=True)
     
-    # Toggle real de StreamLit
     dark_mode_toggle = st.toggle("", value=st.session_state.dark_mode, label_visibility="collapsed")
     if dark_mode_toggle != st.session_state.dark_mode:
         st.session_state.dark_mode = dark_mode_toggle
@@ -1054,7 +1020,7 @@ with st.sidebar:
     
     st.markdown('<div style="margin-bottom: 16px;"></div>', unsafe_allow_html=True)
     
-    # ==================== CORREO ====================
+    # Correo
     st.markdown(f"""
     <div class="sidebar-header">
         <span class="icon">📧</span>
@@ -1068,7 +1034,7 @@ with st.sidebar:
     
     st.markdown('<div style="margin-bottom: 16px;"></div>', unsafe_allow_html=True)
     
-    # ==================== DATOS ====================
+    # Datos
     st.markdown(f"""
     <div class="sidebar-header">
         <span class="icon">📁</span>
@@ -1081,7 +1047,7 @@ with st.sidebar:
     
     st.markdown('<div style="margin-bottom: 16px;"></div>', unsafe_allow_html=True)
     
-    # ==================== FECHA ====================
+    # Fecha
     st.markdown(f"""
     <div class="sidebar-header">
         <span class="icon">⚙️</span>
@@ -1094,7 +1060,7 @@ with st.sidebar:
     
     st.markdown('<div style="margin-bottom: 16px;"></div>', unsafe_allow_html=True)
     
-    # ==================== MODO PRUEBA ====================
+    # Modo prueba
     st.markdown(f"""
     <div class="sidebar-header" style="border-bottom-color: {colors['yellow']};">
         <span class="icon">🔬</span>
@@ -1103,7 +1069,6 @@ with st.sidebar:
     </div>
     """, unsafe_allow_html=True)
     
-    # Checkbox real de StreamLit para modo prueba
     test_mode = st.checkbox("Activar modo prueba", value=False)
     if test_mode:
         test_email = st.text_input("Correo de prueba", placeholder="test@email.com", label_visibility="collapsed")
@@ -1112,7 +1077,6 @@ with st.sidebar:
     
     st.markdown("---")
     
-    # ==================== BOTONES DE ACCIÓN ====================
     col_btn1, col_btn2 = st.columns(2)
     with col_btn1:
         enviar_reales = st.button("📨 Enviar", type="primary", use_container_width=True)
@@ -1123,12 +1087,37 @@ with st.sidebar:
     st.caption("🔒 TLS seguro · Sin almacenamiento")
 
 # ============================================================
-# ÁREA PRINCIPAL
+# ÁREA PRINCIPAL (OPTIMIZADA)
 # ============================================================
 
 if uploaded_file is not None:
-    df = pd.read_excel(uploaded_file)
+    # Cargar el archivo de manera optimizada
+    with st.spinner("⏳ Cargando archivo..."):
+        # Limitar el número de filas para la vista previa
+        if uploaded_file.size > 5 * 1024 * 1024:  # Si el archivo es mayor a 5MB
+            st.warning("📦 Archivo grande detectado. Se cargará de manera optimizada.")
+            # Intentar cargar solo las columnas necesarias
+            try:
+                # Primero leer solo los encabezados
+                df_sample = pd.read_excel(uploaded_file, nrows=0)
+                columnas_necesarias = ['TeamOwner', 'Deadline', 'Case Status', 'Case #', 'Case Type', 'Office Name', 'Desktime']
+                columnas_a_usar = [col for col in columnas_necesarias if col in df_sample.columns]
+                
+                # Recargar con solo las columnas necesarias y limitar filas para preview
+                df = pd.read_excel(uploaded_file, usecols=columnas_a_usar if columnas_a_usar else None)
+                df_preview = df.head(100)  # Solo 100 filas para vista previa
+                st.success(f"✅ Archivo cargado con {len(df)} registros")
+            except Exception as e:
+                # Si falla la carga optimizada, cargar completo pero limitar preview
+                df = pd.read_excel(uploaded_file)
+                df_preview = df.head(100)
+                st.success(f"✅ Archivo cargado con {len(df)} registros")
+        else:
+            df = pd.read_excel(uploaded_file)
+            df_preview = df.head(100)
+            st.success(f"✅ Archivo cargado con {len(df)} registros")
     
+    # Mostrar métricas con los datos completos
     st.markdown(f"<div class='text-large text-dark' style='font-weight: 700; font-size: 20px; margin-bottom: 16px;'>📊 Resumen de datos</div>", unsafe_allow_html=True)
     
     col_m1, col_m2, col_m3, col_m4 = st.columns(4)
@@ -1171,8 +1160,9 @@ if uploaded_file is not None:
             </div>
             """, unsafe_allow_html=True)
     
-    with st.expander("👁️ Vista previa de datos"):
-        st.dataframe(df.head(10), use_container_width=True)
+    # Vista previa limitada a 100 filas
+    with st.expander("👁️ Vista previa de datos (primeras 100 filas)"):
+        st.dataframe(df_preview, use_container_width=True)
     
     if enviar_reales or simular:
         if enviar_reales and (not smtp_username or not smtp_password):
