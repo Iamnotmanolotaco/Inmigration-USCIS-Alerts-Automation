@@ -612,7 +612,7 @@ if 'dark_mode' not in st.session_state:
     st.session_state.dark_mode = False
 
 # ============================================================
-# CSS DE LA INTERFAZ
+# CSS DE LA INTERFAZ - ELIMINADAS ANIMACIONES DE LA BARRA LATERAL
 # ============================================================
 
 def inject_css(colors):
@@ -683,20 +683,15 @@ def inject_css(colors):
             font-weight: 600;
         }}
         
+        /* ============================================================
+           SECCIONES DE LA BARRA LATERAL - SIN ANIMACIONES
+           ============================================================ */
         .sidebar-section {{
             background: rgba(255,255,255,0.06);
             border-radius: 10px;
             padding: 12px 16px;
             margin-bottom: 12px;
             border: 1px solid rgba(255,255,255,0.08);
-            transition: all 0.3s ease;
-            animation: fadeInUp 0.6s ease-out;
-        }}
-        
-        .sidebar-section:hover {{
-            background: rgba(255,255,255,0.10);
-            border-color: {colors['blue']};
-            transform: translateX(4px);
         }}
         
         .sidebar-section .icon {{
