@@ -684,40 +684,42 @@ def inject_css(colors):
             font-weight: 600;
         }}
         
-        /* Estilo para los botones de la barra lateral */
-        .sidebar-button {{
-            background: rgba(255,255,255,0.08);
-            border-radius: 10px;
-            padding: 10px 16px;
-            margin-bottom: 8px;
-            border: 1px solid rgba(255,255,255,0.10);
-            transition: all 0.3s ease;
-            cursor: pointer;
+        /* Estilo mejorado para los encabezados de sección de la barra lateral */
+        .sidebar-header {{
             display: flex;
             align-items: center;
             gap: 10px;
+            padding: 8px 4px;
+            margin-bottom: 4px;
+            border-bottom: 1px solid rgba(255,255,255,0.08);
         }}
         
-        .sidebar-button:hover {{
-            background: rgba(255,255,255,0.16);
-            border-color: {colors['blue']};
-            transform: translateX(4px);
-        }}
-        
-        .sidebar-button .icon {{
+        .sidebar-header .icon {{
             font-size: 18px;
         }}
         
-        .sidebar-button .label {{
+        .sidebar-header .label {{
             font-weight: 700;
             color: {colors['text_sidebar']};
             font-size: 14px;
+            letter-spacing: 0.5px;
         }}
         
-        .sidebar-button .desc {{
+        .sidebar-header .desc {{
             font-size: 11px;
             color: {colors['text_secondary']};
-            margin-top: 2px;
+            margin-left: auto;
+            opacity: 0.6;
+        }}
+        
+        /* Espaciado entre secciones */
+        .sidebar-spacer {{
+            margin: 8px 0 4px 0;
+        }}
+        
+        /* Estilo para los controles en la barra lateral */
+        .sidebar-control {{
+            padding: 4px 0 8px 0;
         }}
         
         .css-1d391kg .stTextInput > div > div > input {{
@@ -772,7 +774,7 @@ def inject_css(colors):
             font-size: 14px !important;
         }}
         
-        /* Botones principales sin animaciones extra */
+        /* Botones principales */
         .css-1d391kg .stButton > button {{
             border-radius: 10px !important;
             font-weight: 700 !important;
@@ -1024,7 +1026,7 @@ inject_css(colors)
 render_banner(colors)
 
 # ============================================================
-# BARRA LATERAL - MODIFICADA CON BOTONES REALES
+# BARRA LATERAL - REDISEÑADA CON ELEMENTOS FUNCIONALES
 # ============================================================
 
 with st.sidebar:
@@ -1035,78 +1037,82 @@ with st.sidebar:
     </div>
     """, unsafe_allow_html=True)
     
-    # Botón de modo oscuro - con animación
+    # ==================== MODO OSCURO ====================
     st.markdown(f"""
-    <div class="sidebar-button" style="border-color: {colors['blue']}; background: rgba(74, 139, 194, 0.15);">
+    <div class="sidebar-header">
         <span class="icon">🌙</span>
-        <div>
-            <div class="label">Modo oscuro</div>
-            <div class="desc">Alternar tema de la interfaz</div>
-        </div>
+        <span class="label">Modo oscuro</span>
+        <span class="desc">🌓</span>
     </div>
     """, unsafe_allow_html=True)
     
+    # Toggle real de StreamLit
     dark_mode_toggle = st.toggle("", value=st.session_state.dark_mode, label_visibility="collapsed")
     if dark_mode_toggle != st.session_state.dark_mode:
         st.session_state.dark_mode = dark_mode_toggle
         st.rerun()
     
-    # Botón de correo - sin animación extra
+    st.markdown('<div style="margin-bottom: 16px;"></div>', unsafe_allow_html=True)
+    
+    # ==================== CORREO ====================
     st.markdown(f"""
-    <div class="sidebar-button">
+    <div class="sidebar-header">
         <span class="icon">📧</span>
-        <div>
-            <div class="label">Correo</div>
-            <div class="desc">Configuración SMTP de Outlook</div>
-        </div>
+        <span class="label">Correo</span>
+        <span class="desc">SMTP</span>
     </div>
     """, unsafe_allow_html=True)
     
     smtp_username = st.text_input("Usuario", value="", placeholder="tu@email.com", label_visibility="collapsed")
     smtp_password = st.text_input("Contraseña", type="password", placeholder="••••••••", label_visibility="collapsed")
     
-    # Botón de datos - sin animación extra
+    st.markdown('<div style="margin-bottom: 16px;"></div>', unsafe_allow_html=True)
+    
+    # ==================== DATOS ====================
     st.markdown(f"""
-    <div class="sidebar-button">
+    <div class="sidebar-header">
         <span class="icon">📁</span>
-        <div>
-            <div class="label">Datos</div>
-            <div class="desc">Carga tu archivo Excel</div>
-        </div>
+        <span class="label">Datos</span>
+        <span class="desc">Excel</span>
     </div>
     """, unsafe_allow_html=True)
     
     uploaded_file = st.file_uploader("Archivo Excel", type=['xlsx', 'xls'], label_visibility="collapsed")
     
-    # Botón de fecha - sin animación extra
+    st.markdown('<div style="margin-bottom: 16px;"></div>', unsafe_allow_html=True)
+    
+    # ==================== FECHA ====================
     st.markdown(f"""
-    <div class="sidebar-button">
+    <div class="sidebar-header">
         <span class="icon">⚙️</span>
-        <div>
-            <div class="label">Fecha</div>
-            <div class="desc">Fecha de referencia</div>
-        </div>
+        <span class="label">Fecha</span>
+        <span class="desc">📅</span>
     </div>
     """, unsafe_allow_html=True)
     
     fecha_referencia = st.date_input("Referencia", value=datetime.now().date(), label_visibility="collapsed")
     
-    # Botón de modo prueba - con animación
+    st.markdown('<div style="margin-bottom: 16px;"></div>', unsafe_allow_html=True)
+    
+    # ==================== MODO PRUEBA ====================
     st.markdown(f"""
-    <div class="sidebar-button" style="border-color: {colors['yellow']}; background: rgba(241, 196, 15, 0.12);">
+    <div class="sidebar-header" style="border-bottom-color: {colors['yellow']};">
         <span class="icon">🔬</span>
-        <div>
-            <div class="label">Modo prueba</div>
-            <div class="desc">Envía a un solo correo de prueba</div>
-        </div>
+        <span class="label" style="color: {colors['yellow']};">Modo prueba</span>
+        <span class="desc">🧪</span>
     </div>
     """, unsafe_allow_html=True)
     
-    test_mode = st.checkbox("", label_visibility="collapsed")
-    test_email = st.text_input("Correo de prueba", placeholder="test@email.com", label_visibility="collapsed") if test_mode else None
+    # Checkbox real de StreamLit para modo prueba
+    test_mode = st.checkbox("Activar modo prueba", value=False)
+    if test_mode:
+        test_email = st.text_input("Correo de prueba", placeholder="test@email.com", label_visibility="collapsed")
+    else:
+        test_email = None
     
     st.markdown("---")
     
+    # ==================== BOTONES DE ACCIÓN ====================
     col_btn1, col_btn2 = st.columns(2)
     with col_btn1:
         enviar_reales = st.button("📨 Enviar", type="primary", use_container_width=True)
