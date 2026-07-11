@@ -27,7 +27,33 @@ URL_BANNER_GITHUB = "https://raw.githubusercontent.com/Iamnotmanolotaco/Inmigrat
 
 DAYS_BEFORE = 7
 DAYS_AFTER = 30
-LOGO_WIDTH = 180  # Ancho fijo del logo en píxeles
+LOGO_WIDTH = 180
+
+# ============================================================
+# INICIALIZAR SESSION STATE
+# ============================================================
+
+# Inicializar todas las variables de sesión al inicio
+if 'dark_mode' not in st.session_state:
+    st.session_state.dark_mode = False
+
+if 'df_cargado' not in st.session_state:
+    st.session_state.df_cargado = None
+
+if 'archivo_cargado' not in st.session_state:
+    st.session_state.archivo_cargado = False
+
+if 'test_mode' not in st.session_state:
+    st.session_state.test_mode = False
+
+if 'test_email' not in st.session_state:
+    st.session_state.test_email = ""
+
+if 'smtp_username' not in st.session_state:
+    st.session_state.smtp_username = ""
+
+if 'smtp_password' not in st.session_state:
+    st.session_state.smtp_password = ""
 
 # ============================================================
 # FUNCIONES PARA OBTENER Y REDIMENSIONAR LOGO
@@ -44,34 +70,22 @@ def get_image_from_github(url):
         return None
 
 def resize_logo(logo_bytes, target_width=LOGO_WIDTH):
-    """
-    Redimensiona el logo a un ancho fijo manteniendo la proporción.
-    Retorna los bytes de la imagen redimensionada.
-    """
     try:
         if logo_bytes is None:
             return None
         
-        # Abrir imagen desde bytes
         img = Image.open(BytesIO(logo_bytes))
-        
-        # Calcular alto manteniendo proporción
         original_width, original_height = img.size
         aspect_ratio = original_height / original_width
         target_height = int(target_width * aspect_ratio)
-        
-        # Redimensionar con LANCZOS (alta calidad)
         img_resized = img.resize((target_width, target_height), Image.Resampling.LANCZOS)
         
-        # Guardar en BytesIO
         output = BytesIO()
         img_resized.save(output, format='PNG', quality=95, optimize=True)
         output.seek(0)
         
-        print(f"   🖼️ Logo redimensionado: {target_width}x{target_height}px")
         return output.getvalue()
     except Exception as e:
-        print(f"   ⚠️ Error al redimensionar logo: {e}")
         return logo_bytes
 
 def get_logo_bytes():
@@ -175,9 +189,6 @@ def generar_html_correo(team_cases, team_name, fecha_referencia, logo_cid=None):
     upcoming_count = len(upcoming)
     rfe_excluded = is_rfe.sum()
     
-    # ============================================================
-    # Logo con tamaño proporcional (solo ancho fijo)
-    # ============================================================
     logo_html = ""
     if logo_cid:
         logo_html = f"""
@@ -239,10 +250,6 @@ def generar_html_correo(team_cases, team_name, fecha_referencia, logo_cid=None):
             .email-footer {{ background-color: #f0f4f8; padding: 20px 36px; border-top: 1px solid #e2e8f0; text-align: center; margin-top: 20px; }}
             .footer-text {{ font-size: 11px; color: #6a7e9e; margin-bottom: 5px; }}
             .footer-note {{ font-size: 10px; color: #8a9eb8; }}
-            
-            /* ============================================================
-               Logo: solo ancho fijo, altura automática (proporcional)
-               ============================================================ */
             .footer-logo {{
                 margin: 10px 0 8px 0;
                 text-align: center;
@@ -255,7 +262,6 @@ def generar_html_correo(team_cases, team_name, fecha_referencia, logo_cid=None):
                 display: block !important;
                 margin: 0 auto !important;
             }}
-            
             @media (max-width: 700px) {{
                 .email-header, .greeting, .report-info, .stats-title, .stats-container, .table-section, .email-footer {{
                     padding-left: 20px; padding-right: 20px;
@@ -608,11 +614,8 @@ st.set_page_config(
     initial_sidebar_state="expanded"
 )
 
-if 'dark_mode' not in st.session_state:
-    st.session_state.dark_mode = False
-
 # ============================================================
-# CSS DE LA INTERFAZ - ELIMINADAS ANIMACIONES DE LA BARRA LATERAL
+# CSS DE LA INTERFAZ
 # ============================================================
 
 def inject_css(colors):
@@ -666,7 +669,6 @@ def inject_css(colors):
             padding: 16px 0 12px 0;
             border-bottom: 2px solid {colors['blue']};
             margin-bottom: 16px;
-            animation: pulse 3s infinite;
         }}
         
         .sidebar-title .main {{
@@ -683,9 +685,6 @@ def inject_css(colors):
             font-weight: 600;
         }}
         
-        /* ============================================================
-           SECCIONES DE LA BARRA LATERAL - SIN ANIMACIONES
-           ============================================================ */
         .sidebar-section {{
             background: rgba(255,255,255,0.06);
             border-radius: 10px;
@@ -1049,8 +1048,9 @@ with st.sidebar:
     </div>
     """, unsafe_allow_html=True)
     
-    smtp_username = st.text_input("Usuario", value="", placeholder="tu@email.com", label_visibility="collapsed")
-    smtp_password = st.text_input("Contraseña", type="password", placeholder="••••••••", label_visibility="collapsed")
+    # Guardar en session_state para no perder el valor
+    st.session_state.smtp_username = st.text_input("Usuario", value=st.session_state.smtp_username, placeholder="tu@email.com", label_visibility="collapsed")
+    st.session_state.smtp_password = st.text_input("Contraseña", type="password", value=st.session_state.smtp_password, placeholder="••••••••", label_visibility="collapsed")
     
     st.markdown("""
     <div class="sidebar-section">
@@ -1063,6 +1063,14 @@ with st.sidebar:
     """, unsafe_allow_html=True)
     
     uploaded_file = st.file_uploader("Archivo Excel", type=['xlsx', 'xls'], label_visibility="collapsed")
+    
+    # Solo cargar el archivo si es nuevo y no está ya cargado
+    if uploaded_file is not None:
+        if not st.session_state.archivo_cargado or st.session_state.archivo_cargado != uploaded_file.name:
+            with st.spinner("⏳ Cargando archivo..."):
+                st.session_state.df_cargado = pd.read_excel(uploaded_file)
+                st.session_state.archivo_cargado = uploaded_file.name
+                st.success(f"✅ Archivo cargado: {len(st.session_state.df_cargado)} registros")
     
     st.markdown("""
     <div class="sidebar-section">
@@ -1086,8 +1094,11 @@ with st.sidebar:
     </div>
     """, unsafe_allow_html=True)
     
-    test_mode = st.checkbox("", label_visibility="collapsed")
-    test_email = st.text_input("Correo de prueba", placeholder="test@email.com", label_visibility="collapsed") if test_mode else None
+    st.session_state.test_mode = st.checkbox("", value=st.session_state.test_mode, label_visibility="collapsed")
+    if st.session_state.test_mode:
+        st.session_state.test_email = st.text_input("Correo de prueba", value=st.session_state.test_email, placeholder="test@email.com", label_visibility="collapsed")
+    else:
+        st.session_state.test_email = ""
     
     st.markdown("---")
     
@@ -1101,11 +1112,11 @@ with st.sidebar:
     st.caption("🔒 TLS seguro · Sin almacenamiento")
 
 # ============================================================
-# ÁREA PRINCIPAL
+# ÁREA PRINCIPAL - USANDO DATOS DE SESSION_STATE
 # ============================================================
 
-if uploaded_file is not None:
-    df = pd.read_excel(uploaded_file)
+if st.session_state.df_cargado is not None:
+    df = st.session_state.df_cargado
     
     st.markdown(f"<div class='text-large text-dark' style='font-weight: 700; font-size: 20px; margin-bottom: 16px;'>📊 Resumen de datos</div>", unsafe_allow_html=True)
     
@@ -1153,13 +1164,16 @@ if uploaded_file is not None:
         st.dataframe(df.head(10), use_container_width=True)
     
     if enviar_reales or simular:
-        if enviar_reales and (not smtp_username or not smtp_password):
+        if enviar_reales and (not st.session_state.smtp_username or not st.session_state.smtp_password):
             st.error("⚠️ Ingresa tus credenciales de Outlook para enviar correos reales")
         else:
             with st.spinner("⏳ Procesando alertas..."):
                 resultados, errores = procesar_alertas(
-                    df, fecha_referencia, smtp_username, smtp_password,
-                    test_email, enviar_reales
+                    df, fecha_referencia, 
+                    st.session_state.smtp_username, 
+                    st.session_state.smtp_password,
+                    st.session_state.test_email if st.session_state.test_mode else None, 
+                    enviar_reales
                 )
             
             st.markdown("---")
