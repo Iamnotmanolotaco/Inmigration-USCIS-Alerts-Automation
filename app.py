@@ -612,7 +612,7 @@ if 'dark_mode' not in st.session_state:
     st.session_state.dark_mode = False
 
 # ============================================================
-# CSS DE LA INTERFAZ (SIMPLIFICADO)
+# CSS DE LA INTERFAZ
 # ============================================================
 
 def inject_css(colors):
@@ -681,6 +681,39 @@ def inject_css(colors):
             color: {colors['text_secondary']};
             letter-spacing: 1.5px;
             font-weight: 600;
+        }}
+        
+        .sidebar-section {{
+            background: rgba(255,255,255,0.06);
+            border-radius: 10px;
+            padding: 12px 16px;
+            margin-bottom: 12px;
+            border: 1px solid rgba(255,255,255,0.08);
+            transition: all 0.3s ease;
+            animation: fadeInUp 0.6s ease-out;
+        }}
+        
+        .sidebar-section:hover {{
+            background: rgba(255,255,255,0.10);
+            border-color: {colors['blue']};
+            transform: translateX(4px);
+        }}
+        
+        .sidebar-section .icon {{
+            font-size: 18px;
+            margin-right: 8px;
+        }}
+        
+        .sidebar-section .label {{
+            font-weight: 700;
+            color: {colors['text_sidebar']};
+            font-size: 14px;
+        }}
+        
+        .sidebar-section .desc {{
+            font-size: 12px;
+            color: {colors['text_secondary']};
+            margin-top: 2px;
         }}
         
         .css-1d391kg .stTextInput > div > div > input {{
@@ -997,40 +1030,67 @@ with st.sidebar:
     </div>
     """, unsafe_allow_html=True)
     
-    # Modo oscuro - sin animaciones falsas
-    st.markdown("#### 🌙 Modo oscuro")
+    st.markdown("""
+    <div class="sidebar-section">
+        <div style="display: flex; align-items: center; gap: 8px;">
+            <span class="icon">🌙</span>
+            <span class="label">Modo oscuro</span>
+        </div>
+    </div>
+    """, unsafe_allow_html=True)
+    
     dark_mode_toggle = st.toggle("", value=st.session_state.dark_mode, label_visibility="collapsed")
     if dark_mode_toggle != st.session_state.dark_mode:
         st.session_state.dark_mode = dark_mode_toggle
         st.rerun()
     
-    st.markdown("---")
+    st.markdown("""
+    <div class="sidebar-section">
+        <div style="display: flex; align-items: center; gap: 8px;">
+            <span class="icon">📧</span>
+            <span class="label">Correo</span>
+        </div>
+        <div class="desc">Configuración SMTP de Outlook</div>
+    </div>
+    """, unsafe_allow_html=True)
     
-    # Correo
-    st.markdown("#### 📧 Correo")
-    st.caption("Configuración SMTP de Outlook")
     smtp_username = st.text_input("Usuario", value="", placeholder="tu@email.com", label_visibility="collapsed")
     smtp_password = st.text_input("Contraseña", type="password", placeholder="••••••••", label_visibility="collapsed")
     
-    st.markdown("---")
+    st.markdown("""
+    <div class="sidebar-section">
+        <div style="display: flex; align-items: center; gap: 8px;">
+            <span class="icon">📁</span>
+            <span class="label">Datos</span>
+        </div>
+        <div class="desc">Carga tu archivo Excel</div>
+    </div>
+    """, unsafe_allow_html=True)
     
-    # Datos
-    st.markdown("#### 📁 Datos")
-    st.caption("Carga tu archivo Excel")
     uploaded_file = st.file_uploader("Archivo Excel", type=['xlsx', 'xls'], label_visibility="collapsed")
     
-    st.markdown("---")
+    st.markdown("""
+    <div class="sidebar-section">
+        <div style="display: flex; align-items: center; gap: 8px;">
+            <span class="icon">⚙️</span>
+            <span class="label">Fecha</span>
+        </div>
+        <div class="desc">Fecha de referencia</div>
+    </div>
+    """, unsafe_allow_html=True)
     
-    # Fecha
-    st.markdown("#### ⚙️ Fecha")
-    st.caption("Fecha de referencia")
     fecha_referencia = st.date_input("Referencia", value=datetime.now().date(), label_visibility="collapsed")
     
-    st.markdown("---")
+    st.markdown("""
+    <div class="sidebar-section">
+        <div style="display: flex; align-items: center; gap: 8px;">
+            <span class="icon">🔬</span>
+            <span class="label">Modo prueba</span>
+        </div>
+        <div class="desc">Envía a un solo correo de prueba</div>
+    </div>
+    """, unsafe_allow_html=True)
     
-    # Modo prueba
-    st.markdown("#### 🔬 Modo prueba")
-    st.caption("Envía a un solo correo de prueba")
     test_mode = st.checkbox("", label_visibility="collapsed")
     test_email = st.text_input("Correo de prueba", placeholder="test@email.com", label_visibility="collapsed") if test_mode else None
     
