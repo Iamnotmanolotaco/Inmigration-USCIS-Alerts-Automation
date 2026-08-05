@@ -26,7 +26,7 @@ URL_LOGO_GITHUB = "https://raw.githubusercontent.com/Iamnotmanolotaco/Inmigratio
 URL_BANNER_GITHUB = "https://raw.githubusercontent.com/Iamnotmanolotaco/Inmigration-USCIS-Alerts-Automation/main/banner.png"
 
 DAYS_BEFORE = 7
-DAYS_AFTER = 30
+DAYS_AFTER = 60
 LOGO_WIDTH = 180  # Ancho fijo del logo en píxeles
 
 # ============================================================
