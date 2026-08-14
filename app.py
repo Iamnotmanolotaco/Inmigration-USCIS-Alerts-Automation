@@ -149,15 +149,17 @@ def get_cc_for_team(team_name):
     return cc_by_team.get(team_name.strip(), default_cc)
 
 # ============================================================
-# FUNCIÓN PARA GENERAR HTML DEL CORREO CON LOGO (CID)
+# FUNCIÓN PARA GENERAR HTML DEL CORREO CON LOGO (CID) - CORREGIDA
 # ============================================================
 
 def generar_html_correo(team_cases, team_name, fecha_referencia, logo_cid=None):
-    is_rfe = pd.Series([False] * len(team_cases), index=team_cases.index)
+    # ============================================================
+    # CORREGIDO: Usar apply() para evitar problemas de índices
+    # ============================================================
     if 'Case Status' in team_cases.columns:
-        for idx, status in team_cases['Case Status'].items():
-            if is_rfe_case(status):
-                is_rfe.iloc[idx] = True
+        is_rfe = team_cases['Case Status'].apply(is_rfe_case)
+    else:
+        is_rfe = pd.Series([False] * len(team_cases), index=team_cases.index)
     
     team_cases_filtered = team_cases[~is_rfe].copy()
     if len(team_cases_filtered) == 0:
