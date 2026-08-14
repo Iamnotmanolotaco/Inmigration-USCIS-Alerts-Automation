@@ -27,7 +27,7 @@ URL_BANNER_GITHUB = "https://raw.githubusercontent.com/Iamnotmanolotaco/Inmigrat
 
 DAYS_BEFORE = 7
 DAYS_AFTER = 60
-LOGO_WIDTH = 180  # Ancho fijo del logo en píxeles
+LOGO_WIDTH = 180
 
 # ============================================================
 # FUNCIONES PARA OBTENER Y REDIMENSIONAR LOGO
@@ -44,30 +44,17 @@ def get_image_from_github(url):
         return None
 
 def resize_logo(logo_bytes, target_width=LOGO_WIDTH):
-    """
-    Redimensiona el logo a un ancho fijo manteniendo la proporción.
-    Retorna los bytes de la imagen redimensionada.
-    """
     try:
         if logo_bytes is None:
             return None
-        
-        # Abrir imagen desde bytes
         img = Image.open(BytesIO(logo_bytes))
-        
-        # Calcular alto manteniendo proporción
         original_width, original_height = img.size
         aspect_ratio = original_height / original_width
         target_height = int(target_width * aspect_ratio)
-        
-        # Redimensionar con LANCZOS (alta calidad)
         img_resized = img.resize((target_width, target_height), Image.Resampling.LANCZOS)
-        
-        # Guardar en BytesIO
         output = BytesIO()
         img_resized.save(output, format='PNG', quality=95, optimize=True)
         output.seek(0)
-        
         print(f"   🖼️ Logo redimensionado: {target_width}x{target_height}px")
         return output.getvalue()
     except Exception as e:
@@ -129,21 +116,21 @@ def get_days_style(days):
 
 def get_team_email(team_name):
     team_emails = {
-            "Kia": "kia@communitylawgroup.com",
-            "Alonso": "Legalassistant2@communitylawgroup.com",
-            "Francy": "legalsupport11@communitylawgroup.com",
-            "Kevin": "legalsupport12@communitylawgroup.com",
-            "Juliana": "legalsupport4@communitylawgroup.com",
+        "Kia": "kia@communitylawgroup.com",
+        "Alonso": "Legalassistant2@communitylawgroup.com",
+        "Francy": "legalsupport11@communitylawgroup.com",
+        "Kevin": "legalsupport12@communitylawgroup.com",
+        "Juliana": "legalsupport4@communitylawgroup.com",
     }
     return team_emails.get(team_name.strip(), None)
 
 def get_cc_for_team(team_name):
     cc_by_team = {
         "Kia": ["litigationdepartment@communitylawgroup.com"],
-            "Alonso": ["Legalassistant7@communitylawgroup.com","amanda@communitylawgroup.com","ellen@communitylawgroup.com","Delmin@communitylawgroup.com", "legalsupport7@communitylawgroup.com"],
-            "Francy": ["legalsupport5@communitylawgroup.com","amanda@communitylawgroup.com","Delmin@communitylawgroup.com"],
-            "Kevin": ["ellen@communitylawgroup.com","Delmin@communitylawgroup.com"],
-            "Juliana": ["supernumerary2@communitylawgroup.com", "oscar@communitylawgroup.com", "Delmin@communitylawgroup.com"],
+        "Alonso": ["Legalassistant7@communitylawgroup.com","amanda@communitylawgroup.com","ellen@communitylawgroup.com","Delmin@communitylawgroup.com", "legalsupport7@communitylawgroup.com"],
+        "Francy": ["legalsupport5@communitylawgroup.com","amanda@communitylawgroup.com","Delmin@communitylawgroup.com"],
+        "Kevin": ["ellen@communitylawgroup.com","Delmin@communitylawgroup.com"],
+        "Juliana": ["supernumerary2@communitylawgroup.com", "oscar@communitylawgroup.com", "Delmin@communitylawgroup.com"],
     }
     default_cc = ["default_supervisor@communitylawgroup.com"]
     return cc_by_team.get(team_name.strip(), default_cc)
@@ -154,7 +141,8 @@ def get_cc_for_team(team_name):
 
 def generar_html_correo(team_cases, team_name, fecha_referencia, logo_cid=None):
     # ============================================================
-    # CORREGIDO: Usar apply() para evitar problemas de índices
+    # CORRECCIÓN: Usar apply() en lugar de iteración manual
+    # Esto evita el error "iloc cannot enlarge its target object"
     # ============================================================
     if 'Case Status' in team_cases.columns:
         is_rfe = team_cases['Case Status'].apply(is_rfe_case)
@@ -177,9 +165,6 @@ def generar_html_correo(team_cases, team_name, fecha_referencia, logo_cid=None):
     upcoming_count = len(upcoming)
     rfe_excluded = is_rfe.sum()
     
-    # ============================================================
-    # Logo con tamaño proporcional (solo ancho fijo)
-    # ============================================================
     logo_html = ""
     if logo_cid:
         logo_html = f"""
@@ -241,10 +226,6 @@ def generar_html_correo(team_cases, team_name, fecha_referencia, logo_cid=None):
             .email-footer {{ background-color: #f0f4f8; padding: 20px 36px; border-top: 1px solid #e2e8f0; text-align: center; margin-top: 20px; }}
             .footer-text {{ font-size: 11px; color: #6a7e9e; margin-bottom: 5px; }}
             .footer-note {{ font-size: 10px; color: #8a9eb8; }}
-            
-            /* ============================================================
-               Logo: solo ancho fijo, altura automática (proporcional)
-               ============================================================ */
             .footer-logo {{
                 margin: 10px 0 8px 0;
                 text-align: center;
@@ -257,7 +238,6 @@ def generar_html_correo(team_cases, team_name, fecha_referencia, logo_cid=None):
                 display: block !important;
                 margin: 0 auto !important;
             }}
-            
             @media (max-width: 700px) {{
                 .email-header, .greeting, .report-info, .stats-title, .stats-container, .table-section, .email-footer {{
                     padding-left: 20px; padding-right: 20px;
